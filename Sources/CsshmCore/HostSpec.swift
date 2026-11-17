@@ -5,7 +5,13 @@ public enum HostSpecError: Error, Equatable, CustomStringConvertible {
 
     public var description: String {
         switch self {
-        case .invalid(let text): return "Bad host [\(text)]"
+        case .invalid(let text):
+            // The text is being refused, perhaps for holding control
+            // characters, so do not print those to the terminal either.
+            let shown = String(String.UnicodeScalarView(text.unicodeScalars.map {
+                $0.value < 0x20 || (0x7f...0x9f).contains($0.value) ? "?" : $0
+            }))
+            return "Bad host [\(shown)]"
         }
     }
 }
@@ -100,6 +106,25 @@ public struct HostSpec: Equatable, Codable, Sendable {
         }
 
         guard !host.isEmpty, !host.hasPrefix("-") else { throw HostSpecError.invalid(text) }
+        // Host names are shown in window titles and handed to ssh, which may
+        // pass them on to a ProxyCommand. Keep them to characters that mean
+        // nothing to a terminal or a shell.
+        guard host.allSatisfy({ HostSpec.isNameCharacter($0) || $0 == ":" || $0 == "%" }) else {
+            throw HostSpecError.invalid(text)
+        }
+        if let u = user {
+            guard !u.hasPrefix("-"), u.allSatisfy({ HostSpec.isNameCharacter($0) || "+@\\".contains($0) }) else {
+                throw HostSpecError.invalid(text)
+            }
+        }
+        if let k = key {
+            guard !k.hasPrefix("-"), !k.unicodeScalars.contains(where: HostSpec.isControl) else {
+                throw HostSpecError.invalid(text)
+            }
+        }
+        if let c = command {
+            guard !c.unicodeScalars.contains(where: HostSpec.isControl) else { throw HostSpecError.invalid(text) }
+        }
         if let p = port {
             guard !p.isEmpty, p.allSatisfy({ $0.isASCII && $0.isNumber }) else { throw HostSpecError.invalid(text) }
         }
@@ -110,6 +135,16 @@ public struct HostSpec: Equatable, Codable, Sendable {
         self.host = host
         self.port = port
         self.command = (command?.isEmpty ?? true) ? nil : command
+    }
+
+    /// Letters, digits, dot, dash and underscore.
+    private static func isNameCharacter(_ ch: Character) -> Bool {
+        ch.isLetter || ch.isNumber || ch == "." || ch == "-" || ch == "_"
+    }
+
+    /// Control characters, which a terminal would act on if they were printed.
+    private static func isControl(_ scalar: Unicode.Scalar) -> Bool {
+        scalar.value < 0x20 || (0x7f...0x9f).contains(scalar.value)
     }
 
     /// The argument list that starts this host's session.

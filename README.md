@@ -28,6 +28,7 @@ had wide use. Please report problems.
 - [Choosing which hosts receive your typing](#choosing-which-hosts-receive-your-typing)
 - [When a session ends](#when-a-session-ends)
 - [Keys and passwords](#keys-and-passwords)
+- [Security](#security)
 - [Coming from csshX](#coming-from-csshx)
 - [Troubleshooting](#troubleshooting)
 - [How it works](#how-it-works)
@@ -42,7 +43,7 @@ had wide use. Please report problems.
 
 ## Install
 
-    curl -s https://raw.githubusercontent.com/anarchy89/csshm/main/setup.sh | sh
+    curl -fsSL https://raw.githubusercontent.com/anarchy89/csshm/main/setup.sh | sh
 
 This downloads the latest release, checks that it runs and puts it in
 `/usr/local/bin`, asking for your password if that folder needs it. csshm is
@@ -124,6 +125,9 @@ The `@` and comma forms can be mixed freely. Rules worth knowing:
 - The user comes first: `ubuntu,10.0.0.5`, not `10.0.0.5,ubuntu`.
 - No spaces inside a host: write `ubuntu,10.0.0.5`, not `ubuntu, 10.0.0.5`.
 - A key path cannot contain a comma or a space.
+- A host name may contain letters, digits, dots, dashes and underscores (plus
+  colons and `%` for IPv6). A user may also contain `+`, `@` and `\`.
+  Anything else is refused, including control characters.
 - If any host is written wrongly, csshm names it and opens nothing.
 - The same host listed twice opens two windows.
 
@@ -389,6 +393,34 @@ window. If every host shares one password, type it once in the master window.
 **New servers:** the first connection to a server asks you to confirm its
 host key in each window. Typing `yes` in the master answers them all or
 pass `-o StrictHostKeyChecking=accept-new` in `--ssh_args`.
+
+## Security
+
+csshm types for you on many servers at once, so a few habits matter.
+
+- **Treat a hosts file or settings file like a script.** Text after a host is
+  a command that runs on that server as you and the settings file can name
+  the program that is run in place of ssh. Only use files you wrote or have read.
+- **Be careful typing passwords in the master window.** They go to every
+  enabled host. A host that is sitting at a shell prompt instead of a
+  password prompt will receive your password as a command and may keep it
+  in its history. Disable such hosts first or type the password in each window.
+- **Keep host key checking on.** `-o StrictHostKeyChecking=no` lets someone
+  on the network pose as your server. `accept-new` trusts a server the first
+  time and warns if it later changes.
+- **Scrollback files can hold secrets.** The files written by Ctrl-A `d` are
+  readable only by you; delete them when you are done.
+- **The download is not signed.** The installer and `csshm --update` fetch
+  the binary from this repository's releases over HTTPS and trust what they
+  get. Each release lists the SHA-256 of its binary so you can compare:
+  `shasum -a 256 /usr/local/bin/csshm`. If you prefer, build from source.
+
+What csshm does on its side: it starts ssh directly, never through a shell;
+it refuses host names and users containing characters a shell or a terminal
+would act on; it keeps its socket and session settings in a folder only you
+can open; it never stores a password and it will not run under `sudo`.
+
+To report a security problem, open an issue on GitHub.
 
 ## Coming from csshX
 

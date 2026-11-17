@@ -68,6 +68,37 @@ final class HostSpecTests: XCTestCase {
         }
     }
 
+    /// Host names end up in window titles and on ssh's command line, so
+    /// anything a terminal or a shell would act on is refused.
+    func testRejectsControlAndShellCharacters() {
+        let bad = [
+            "ev\u{1b}]0;title\u{07}il",          // terminal escape sequence
+            "host\u{07}",                          // bell
+            "host\u{7f}",
+            "host\u{9b}31m",                       // C1 control
+            "host;reboot", "host$(id)", "host`id`", "host|nc", "host&", "a/b", "host'x", "host\"x", "host>f",
+            "us\u{1b}[31mer@host", "us;er@host", "us$er,host", "-oX@host",
+            "user,host,ke\u{1b}y", "user,host,-oProxyCommand=x",
+        ]
+        for text in bad {
+            XCTAssertThrowsError(try HostSpec(parsing: text), text.debugDescription)
+        }
+        XCTAssertThrowsError(try HostSpec(parsing: "web1", command: "echo \u{1b}[2J"))
+    }
+
+    func testErrorMessageDoesNotRepeatControlCharacters() {
+        XCTAssertEqual(HostSpecError.invalid("ev\u{1b}]0;x\u{07}il").description, "Bad host [ev?]0;x?il]")
+    }
+
+    func testUsualNamesStillPass() throws {
+        for text in ["web-1.example.com", "db_02", "10.0.0.1", "fe80::1%en0", "[fe80::1%en0]:22", "münchen.example",
+                     "first.last@host", "DOMAIN\\user@host", "svc+deploy@host", "me@corp.com@host",
+                     "user,host,~/.ssh/id_ed25519", "user,host,/keys/my key.pem".replacingOccurrences(of: " ", with: "_")] {
+            XCTAssertNoThrow(try HostSpec(parsing: text), text)
+        }
+        XCTAssertNoThrow(try HostSpec(parsing: "web1", command: "tail -f /var/log/syslog | grep -v 'x;y'"))
+    }
+
     func testCommandMatchesTheOwnersScript() throws {
         let args = try ShellWords.split("-i ~/.ssh/ssh-key -o StrictHostKeyChecking=no")
         let spec = try HostSpec(parsing: "10.1.2.3")

@@ -740,7 +740,13 @@ final class Master {
             used.insert(label)
             do {
                 let text = try backend.history(of: window)
-                try text.write(toFile: "\(base).\(label).txt", atomically: true, encoding: .utf8)
+                // Scrollback can hold secrets: readable by the owner only.
+                let path = "\(base).\(label).txt"
+                try? FileManager.default.removeItem(atPath: path)
+                guard FileManager.default.createFile(atPath: path, contents: Data(text.utf8),
+                                                     attributes: [.posixPermissions: 0o600]) else {
+                    throw CocoaError(.fileWriteUnknown)
+                }
                 written += 1
             } catch {
                 failure = "\(error.localizedDescription)"
