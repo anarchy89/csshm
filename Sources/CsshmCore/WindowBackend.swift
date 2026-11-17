@@ -18,6 +18,23 @@ public struct WindowInfo: Equatable, Sendable {
     }
 }
 
+/// A window to open. Giving the bounds and style here lets the window appear
+/// already in place, instead of being moved after it has opened.
+public struct WindowRequest: Equatable, Sendable {
+    /// The line typed into the new window's shell.
+    public var command: String
+    public var bounds: Rect?
+    public var profile: String?
+    public var fontSize: Int?
+
+    public init(command: String, bounds: Rect? = nil, profile: String? = nil, fontSize: Int? = nil) {
+        self.command = command
+        self.bounds = bounds
+        self.profile = profile
+        self.fontSize = fontSize
+    }
+}
+
 /// One change to a window. Operations are sent in batches.
 public enum WindowOp: Equatable, Sendable {
     case setBounds(window: Int, Rect)
@@ -39,8 +56,9 @@ public enum WindowOp: Equatable, Sendable {
 public protocol WindowBackend {
     /// Visible frames of the attached displays, primary display first.
     func screens() throws -> [Rect]
-    /// Opens one new window per command line and types the line into it.
-    func openWindows(commands: [String]) throws
+    /// Opens one new window per request, in order, and returns each one's
+    /// id (`nil` where it could not be found out).
+    func openWindows(_ requests: [WindowRequest]) throws -> [Int?]
     func listWindows() throws -> [WindowInfo]
     /// Names of the terminal application's profiles.
     func profileNames() throws -> [String]

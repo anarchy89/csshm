@@ -22,8 +22,11 @@ final class HostWindow {
     var disabled = false
     /// The session ended with an error and the window is showing it.
     var dead = false
+    /// The window's cell in the grid.
     var rect: Rect?
     var area: Rect?
+    /// Where csshm last put the window; `nil` when that is no longer known.
+    var placed: Rect?
     var zoomed = false
     let created = Date()
 
@@ -59,6 +62,8 @@ final class Master {
     private var screens: [Int]
     private var grid: GridOptions
     private var measuredOn: Rect?
+    private var masterPlaced: Rect?
+    private var lastScreens: [Rect] = []
     private var lastLayout: GridLayout?
     private var adjustedForCount = -1
     private var selection: Int?
@@ -427,6 +432,8 @@ final class Master {
 
     private func apply(_ ops: [WindowOp]) {
         guard !ops.isEmpty else { return }
+        let started = Date()
+        defer { log(String(format: "%d window change(s) took %.0f ms", ops.count, Date().timeIntervalSince(started) * 1000)) }
         do {
             try backend.perform(ops)
         } catch {
@@ -442,62 +449,74 @@ final class Master {
         log("master window \(masterWindow.map(String.init) ?? "not found") on \(tty)")
     }
 
+    /// Opens windows for `newHosts`. The grid is worked out first, counting
+    /// the new windows, so each one opens already in its cell.
     private func open(_ newHosts: [HostWindow]) {
-        let commands = newHosts.map {
-            SessionConfig.roleCommand(executable: config.executable, role: "slave", session: session, slaveID: $0.id)
+        let future = ordered.filter { host in host.windowID != nil || newHosts.contains { $0 === host } }
+        let layout = planLayout(count: future.count)
+        var cells: [Int: (rect: Rect, area: Rect)] = [:]
+        if let layout = layout {
+            for (index, host) in future.enumerated() {
+                cells[host.id] = (layout.windows[index], layout.areas[index])
+            }
+        }
+        let requests = newHosts.map { host in
+            WindowRequest(
+                command: SessionConfig.roleCommand(executable: config.executable, role: "slave", session: session, slaveID: host.id),
+                bounds: cells[host.id]?.rect,
+                profile: config.profile,
+                fontSize: config.fontSize)
         }
         do {
-            try backend.openWindows(commands: commands)
-            log("opened \(commands.count) window(s)")
+            let ids = try backend.openWindows(requests)
+            for (host, id) in zip(newHosts, ids) {
+                host.windowID = id
+                if id != nil, let cell = cells[host.id] {
+                    host.rect = cell.rect
+                    host.area = cell.area
+                    host.placed = cell.rect
+                }
+            }
+            log("opened \(requests.count) window(s), \(ids.compactMap { $0 }.count) placed")
         } catch {
             log("opening windows failed: \(error)")
             status = "\(error)"
         }
         // New windows take the keyboard; give it back to the master.
         if let window = masterWindow { apply([.raise(window: window)]) }
+        // Windows that were already open move to their new cells, and the
+        // master takes its final place. Windows already in place are skipped.
+        retile(raise: false)
         needsRedraw = true
     }
 
-    /// Matches each connected host to its Terminal window by terminal device.
-    /// A finished window can still report a device that has since been
-    /// reused, so the newest window with that device is the live one.
+    /// Reads each connected host's window: its own colours and font size,
+    /// which csshm needs before it can change and later restore them. A
+    /// window whose id is not known yet is found by its terminal device; a
+    /// finished window can still report a device that has since been reused,
+    /// so the newest window with that device is the live one.
     private func resolveWindows() {
-        let waiting = hosts.values.filter { $0.windowID == nil && $0.tty != nil }
+        let waiting = hosts.values.filter { $0.original == nil && $0.tty != nil }
         guard !waiting.isEmpty || masterWindow == nil else { return }
         log("looking up \(waiting.count) window(s)")
-        guard var windows = try? backend.listWindows() else { return }
+        guard let windows = try? backend.listWindows() else { return }
         if masterWindow == nil { locateOwnWindow() }
-        func newest(for host: HostWindow, in list: [WindowInfo]) -> WindowInfo? {
-            list.filter { $0.tty == host.tty }.max(by: { $0.id < $1.id })
-        }
-        // A profile or font size has to be in place before the window's own
-        // colours and size are noted, because both change them.
-        if config.profile != nil || config.fontSize != nil {
-            var styling: [WindowOp] = []
-            for host in waiting {
-                guard let match = newest(for: host, in: windows) else { continue }
-                if let profile = config.profile { styling.append(.setProfile(window: match.id, name: profile)) }
-                if let size = config.fontSize { styling.append(.setFontSize(window: match.id, size: size)) }
-            }
-            if !styling.isEmpty {
-                apply(styling)
-                windows = (try? backend.listWindows()) ?? windows
-            }
-        }
-        var found = false
+        var discovered = false
         for host in waiting {
-            guard let match = newest(for: host, in: windows) else { continue }
-            host.windowID = match.id
+            let byDevice = windows.filter { $0.tty == host.tty }.max(by: { $0.id < $1.id })
+            guard let match = windows.first(where: { $0.id == host.windowID && $0.tty == host.tty }) ?? byDevice else { continue }
+            if host.windowID != match.id {
+                log("\(host.name) is window \(match.id)")
+                host.windowID = match.id
+                host.placed = nil
+                discovered = true
+            }
             host.original = (match.foreground, match.background)
             host.fontSize = match.fontSize
-            found = true
-            log("\(host.name) is window \(match.id)")
         }
-        if found {
-            refreshColors()
-            askRetile(after: 0.4)
-        }
-        if hosts.values.contains(where: { $0.windowID == nil && $0.connected && Date().timeIntervalSince($0.created) < 20 }) {
+        refreshColors()
+        if discovered { askRetile(after: 0.4) }
+        if hosts.values.contains(where: { $0.original == nil && $0.connected && Date().timeIntervalSince($0.created) < 20 }) {
             resolveAt = Date().addingTimeInterval(0.5)
         }
     }
@@ -529,11 +548,10 @@ final class Master {
         return chosen.isEmpty ? [all[0]] : chosen
     }
 
-    /// Lays every window out afresh from the current number of windows.
-    /// With `raise`, also un-hides the windows and brings them to the front.
-    private func retile(raise: Bool) {
-        guard let chosen = chosenScreens() else { return }
-        let placed = ordered.filter { $0.windowID != nil }
+    /// Works out the grid for `count` host windows on the chosen screens.
+    private func planLayout(count: Int) -> GridLayout? {
+        guard let chosen = chosenScreens() else { return nil }
+        lastScreens = chosen
 
         // Terminal enforces a minimum window height. Find out how tall the
         // master really is on this screen and give the hosts what is left.
@@ -545,30 +563,56 @@ final class Master {
                 grid.masterHeight = max(config.masterHeight, actual.height)
             }
             measuredOn = first
+            masterPlaced = nil
         }
 
         // A column adjustment made with the grid keys belongs to the windows
         // that were there at the time; once that number changes, work the
         // columns out afresh.
-        if placed.count != adjustedForCount { grid.columnOffset = 0 }
-        let layout = GridLayout.compute(count: placed.count, screens: chosen, options: grid)
+        if count != adjustedForCount { grid.columnOffset = 0 }
+        let layout = GridLayout.compute(count: count, screens: chosen, options: grid)
         lastLayout = layout
+        return layout
+    }
+
+    /// Puts every window in its cell, worked out from the current number of
+    /// windows. A window csshm already put in the right place is left alone.
+    /// With `raise`, every window is placed regardless, un-hidden and brought
+    /// to the front: that is the user asking for everything to be put back.
+    private func retile(raise: Bool) {
+        let placed = ordered.filter { $0.windowID != nil }
+        guard let layout = planLayout(count: placed.count) else { return }
         var ops: [WindowOp] = []
+        var moved = 0
+        // Un-hiding comes first and all together, so it can go to Terminal
+        // as one request for every window.
+        if raise {
+            ops += placed.map { .show(window: $0.windowID!) }
+            if let window = masterWindow { ops.append(.show(window: window)) }
+        }
         for (index, host) in placed.enumerated() {
             let window = host.windowID!
-            if raise { ops.append(.show(window: window)) }
-            ops.append(.setBounds(window: window, layout.windows[index]))
-            if raise { ops.append(.raise(window: window)) }
-            host.rect = layout.windows[index]
+            let cell = layout.windows[index]
+            if raise || host.placed != cell {
+                ops.append(.setBounds(window: window, cell))
+                moved += 1
+            }
+            host.rect = cell
             host.area = layout.areas[index]
+            host.placed = cell
             host.zoomed = false
         }
+        // The host windows come forward together; the master follows on its
+        // own so that it ends up in front with the keyboard.
+        if raise { ops += placed.map { .raise(window: $0.windowID!) } }
         if let window = masterWindow {
-            if raise { ops.append(.show(window: window)) }
-            ops.append(.setBounds(window: window, layout.master))
+            if raise || masterPlaced != layout.master {
+                ops.append(.setBounds(window: window, layout.master))
+                masterPlaced = layout.master
+            }
             if raise { ops.append(.raise(window: window)) }
         }
-        log("retile: \(placed.count) windows, columns \(layout.columns), screens \(chosen)")
+        log("retile: \(placed.count) windows, \(moved) moved, columns \(layout.columns), screens \(lastScreens)")
         apply(ops)
         log("retile done")
     }
@@ -595,6 +639,7 @@ final class Master {
         if let master = masterWindow { ops.append(.raise(window: master)) }
         apply(ops)
         host.zoomed = true
+        host.placed = area
     }
 
     private func unzoomAll() {
@@ -602,6 +647,7 @@ final class Master {
         for host in hosts.values where host.zoomed {
             if let window = host.windowID, let rect = host.rect {
                 ops.append(.setBounds(window: window, rect))
+                host.placed = rect
             }
             host.zoomed = false
         }
@@ -647,6 +693,7 @@ final class Master {
             let size = min(max(host.fontSize + delta, 4), 72)
             guard size != host.fontSize else { continue }
             host.fontSize = size
+            host.placed = nil  // Terminal resizes the window when its font changes
             ops.append(.setFontSize(window: window, size: size))
         }
         guard !ops.isEmpty else {

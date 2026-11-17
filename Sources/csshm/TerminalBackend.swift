@@ -67,14 +67,44 @@ final class TerminalBackend: WindowBackend {
         return real
     }
 
-    func openWindows(commands: [String]) throws {
-        guard !commands.isEmpty else { return }
-        var lines = ["tell application \"Terminal\""]
-        for command in commands {
-            lines.append("do script \(quoted(command))")
+    func openWindows(_ requests: [WindowRequest]) throws -> [Int?] {
+        guard !requests.isEmpty else { return [] }
+        var lines = ["set out to \"\"", "tell application \"Terminal\""]
+        for request in requests {
+            lines.append("set t to do script \(quoted(request.command))")
+            lines.append("set w to 0")
+            // The new window is found through the tab that was just created,
+            // never by its position on screen.
+            lines.append("try")
+            lines.append("set w to id of (first window whose tabs contains t)")
+            lines.append("end try")
+            // Profile and font come first: both make Terminal resize the window.
+            if let profile = request.profile {
+                lines.append("try")
+                lines.append("set current settings of t to settings set \(quoted(profile))")
+                lines.append("end try")
+            }
+            if let size = request.fontSize {
+                lines.append("try")
+                lines.append("set font size of t to \(size)")
+                lines.append("end try")
+            }
+            if let r = request.bounds {
+                lines.append("try")
+                lines.append("if w is not 0 then set bounds of window id w to {\(r.x), \(r.y), \(r.right), \(r.bottom)}")
+                lines.append("end try")
+            }
+            lines.append("set out to out & w & \",\"")
         }
         lines.append("end tell")
-        try run(lines.joined(separator: "\n"))
+        lines.append("return out")
+        let text = try run(lines.joined(separator: "\n")).stringValue ?? ""
+        var ids = text.split(separator: ",", omittingEmptySubsequences: false).dropLast().map { field -> Int? in
+            guard let id = Int(field), id != 0 else { return nil }
+            return id
+        }
+        while ids.count < requests.count { ids.append(nil) }
+        return Array(ids.prefix(requests.count))
     }
 
     func listWindows() throws -> [WindowInfo] {
@@ -159,29 +189,75 @@ final class TerminalBackend: WindowBackend {
             lines.append(statement)
             lines.append("end try")
         }
-        for op in ops {
-            switch op {
+        /// "window id 5", or for several windows one specifier that covers
+        /// them all, so Terminal changes them in a single request.
+        func target(_ ids: [Int]) -> String {
+            ids.count == 1
+                ? "window id \(ids[0])"
+                : "(every window whose " + ids.map { "id is \($0)" }.joined(separator: " or ") + ")"
+        }
+        var index = 0
+        while index < ops.count {
+            switch ops[index] {
+            case .setFontSize:
+                // A run of font changes: one statement per distinct size.
+                var groups: [(size: Int, ids: [Int])] = []
+                while index < ops.count, case .setFontSize(let id, let size) = ops[index] {
+                    if let g = groups.firstIndex(where: { $0.size == size }) { groups[g].ids.append(id) } else { groups.append((size, [id])) }
+                    index += 1
+                }
+                for group in groups {
+                    guarded("set font size of tab 1 of \(target(group.ids)) to \(group.size)")
+                }
+                continue
+            case .setColors:
+                // A run of colour changes: one pair of statements per distinct colouring.
+                var groups: [(foreground: RGB, background: RGB, ids: [Int])] = []
+                while index < ops.count, case .setColors(let id, let foreground, let background) = ops[index] {
+                    if let g = groups.firstIndex(where: { $0.foreground == foreground && $0.background == background }) {
+                        groups[g].ids.append(id)
+                    } else {
+                        groups.append((foreground, background, [id]))
+                    }
+                    index += 1
+                }
+                for group in groups {
+                    guarded("set background color of tab 1 of \(target(group.ids)) to \(list(group.background))")
+                    guarded("set normal text color of tab 1 of \(target(group.ids)) to \(list(group.foreground))")
+                }
+                continue
+            case .show:
+                // A run of windows to un-minimise and un-hide, in one request each.
+                var ids: [Int] = []
+                while index < ops.count, case .show(let id) = ops[index] { ids.append(id); index += 1 }
+                guarded("set miniaturized of \(target(ids)) to false")
+                guarded("set visible of \(target(ids)) to true")
+                continue
+            case .hide:
+                var ids: [Int] = []
+                while index < ops.count, case .hide(let id) = ops[index] { ids.append(id); index += 1 }
+                guarded("set visible of \(target(ids)) to false")
+                continue
+            case .minimise:
+                var ids: [Int] = []
+                while index < ops.count, case .minimise(let id) = ops[index] { ids.append(id); index += 1 }
+                guarded("set miniaturized of \(target(ids)) to true")
+                continue
             case .setBounds(let id, let r):
                 guarded("set bounds of window id \(id) to {\(r.x), \(r.y), \(r.right), \(r.bottom)}")
-            case .setColors(let id, let foreground, let background):
-                guarded("set background color of tab 1 of window id \(id) to \(list(background))")
-                guarded("set normal text color of tab 1 of window id \(id) to \(list(foreground))")
-            case .show(let id):
-                guarded("set miniaturized of window id \(id) to false")
-                guarded("set visible of window id \(id) to true")
-            case .raise(let id):
-                guarded("set frontmost of window id \(id) to true")
-            case .hide(let id):
-                guarded("set visible of window id \(id) to false")
-            case .minimise(let id):
-                guarded("set miniaturized of window id \(id) to true")
+            case .raise:
+                // A run of windows to bring forward together. Their order
+                // among themselves does not matter: they do not overlap.
+                var ids: [Int] = []
+                while index < ops.count, case .raise(let id) = ops[index] { ids.append(id); index += 1 }
+                guarded("set frontmost of \(target(ids)) to true")
+                continue
             case .close(let id):
                 guarded("close window id \(id) saving no")
             case .setProfile(let id, let name):
                 guarded("set current settings of tab 1 of window id \(id) to settings set \(quoted(name))")
-            case .setFontSize(let id, let size):
-                guarded("set font size of tab 1 of window id \(id) to \(size)")
             }
+            index += 1
         }
         lines.append("end tell")
         try run(lines.joined(separator: "\n"))

@@ -204,8 +204,8 @@ enum Launcher {
         do {
             let data = try JSONEncoder().encode(config)
             try data.write(to: URL(fileURLWithPath: session + "/config.json"), options: .atomic)
-            try backend.openWindows(commands: [
-                SessionConfig.roleCommand(executable: config.executable, role: "master", session: session),
+            _ = try backend.openWindows([
+                WindowRequest(command: SessionConfig.roleCommand(executable: config.executable, role: "master", session: session)),
             ])
             try? backend.activate()
         } catch {
