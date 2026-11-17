@@ -24,6 +24,7 @@ had wide use. Please report problems.
 - [Quick start](#quick-start)
 - [Giving hosts](#giving-hosts)
 - [Options](#options)
+- [Containers, pods and other commands](#containers-pods-and-other-commands)
 - [Settings file and clusters](#settings-file-and-clusters)
 - [Monitors and the grid](#monitors-and-the-grid)
 - [The master window and its menu](#the-master-window-and-its-menu)
@@ -191,8 +192,10 @@ One host per line, in any of the forms above.
 | `--ssh_args ARGS` | Extra arguments for ssh, given as one quoted string, for example `"-i ~/.ssh/key -o ConnectTimeout=5"`. They apply to every host. Quotes inside the string are respected; `~` is left for ssh to expand |
 | `--screen SPEC` | Monitors to use. See [Monitors and the grid](#monitors-and-the-grid) |
 | `--hosts FILE`, `--addresses FILE` | Read hosts from a file. `-` means standard input. May be repeated |
-| `--remote_command CMD` | Command to run on every host in place of a login shell |
+| `--remote_command CMD` | Command to run on every host in place of a login shell. The window closes when the command finishes |
+| `--remote_command_keepalive CMD` | The same, but each window stays open after the command finishes so its output can be read. See [When a session ends](#when-a-session-ends) |
 | `--ssh COMMAND` | Program to run instead of `ssh`. It receives the same arguments ssh would |
+| `--command TEMPLATE` | Run this in each window in place of ssh, with `{}` standing for the host. See [Containers, pods and other commands](#containers-pods-and-other-commands) |
 | `-x`, `--tile_x N` | Fixed number of columns on each monitor |
 | `-y`, `--tile_y N` | Fixed number of rows on each monitor. Ignored if `--tile_x` is given |
 | `--profile NAME` | Terminal profile for the host windows, for example one with a small font or the bell switched off. `--slave_settings_set` and `--sss` mean the same |
@@ -213,6 +216,49 @@ Each host's session is started as:
 
     ssh [-i KEY] [ssh_args] [-l USER] [-p PORT] HOST [COMMAND]
 
+unless `--command` is given, in which case the template is run instead.
+
+## Containers, pods and other commands
+
+csshm is not limited to ssh. `--command` takes any command, written once
+with `{}` where the name of each target goes and runs it in every window:
+
+    csshm --command "docker exec -it {} sh" web db cache
+
+Typing in the master then goes to every container, exactly as with ssh hosts.
+
+Some recipes:
+
+    # every running Docker container (podman works the same way)
+    csshm --command "docker exec -it {} sh" $(docker ps --format '{{.Names}}')
+
+    # every pod matching a label
+    csshm --command "kubectl exec -it {} -- sh" \
+        $(kubectl get pods -l app=web -o custom-columns=:metadata.name --no-headers)
+
+    # pods in another namespace
+    csshm --command "kubectl -n prod exec -it {} -- bash" api-1 api-2 api-3
+
+    # Tart virtual machines are ordinary ssh hosts
+    csshm --login admin $(tart ip vm1) $(tart ip vm2)
+
+How the template works:
+
+- `{}` is the host name. `{user}` is the user given with the host or with
+  `--login`. `{port}` is the port given with the host.
+- The template is split into words the way a shell would split it, then run
+  directly with no shell in between. Quote a part to keep it as one word:
+  `--command "sh -c 'echo {}; exec nc {} 23'"`.
+- A placeholder can sit inside a word, as in `pod/{}`.
+- Target names follow the same rules as host names: letters, digits, dots,
+  dashes and underscores. A name cannot add extra words to the command.
+- `--command` replaces ssh, so it cannot be combined with `--ssh`,
+  `--ssh_args`, `--remote_command`, a per-host key or a per-host command.
+- If the command fails within its first five seconds, for example because the
+  container does not exist, the window stays open in grey with the error, as
+  it does for a failed ssh connection. Press Enter in it to close it.
+- To make a template the default, put `command = "..."` in the settings file.
+
 ## Settings file and clusters
 
 csshm reads `~/.config/csshm/config.toml` if it exists. Every line is
@@ -224,6 +270,7 @@ optional and anything given on the command line wins over the file.
     screen = "2-3"
     remote_command = ""
     ssh = "ssh"
+    # command = "docker exec -it {} sh"   # run this in place of ssh
     tile_x = 0                 # 0 means work it out
     tile_y = 0
 
@@ -389,6 +436,13 @@ flips every host. Ctrl-A `n` enables everything again.
 - If ssh itself fails, for example the host cannot be reached or the
   connection drops, the window stays open with grey text so you can read the
   error. Press Enter in that window to close it.
+- With `--remote_command_keepalive` every window stays open after its
+  command finishes, so you can read the output side by side:
+
+      csshm --remote_command_keepalive "df -h /" web1 web2 web3
+
+  Finished windows turn grey and stop receiving your typing. Press Enter in
+  one to close it, or use the menu's `x` to close them all.
 - When the last host window has gone, the master window closes too.
 
 Sessions ending one at a time, with the grid reshaping itself each time:

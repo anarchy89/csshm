@@ -12,6 +12,11 @@ enum Slave {
     private static let lock = NSLock()
     private static var quitRequested = false
     private static var ended = false
+    private static var holdQuickFailure = false
+    private static var keepOpen = false
+    private static var started = Date()
+    /// How soon a failure counts as "never started" for commands other than ssh.
+    private static let quickFailure: TimeInterval = 5
 
     static func run(session: String, id: Int) -> Never {
         let socketPath = session + "/sock"
@@ -29,7 +34,7 @@ enum Slave {
         writeAll(socketFD, Message.hello(id: UInt32(id), tty: tty, pid: getpid()).encoded())
 
         var decoder = MessageDecoder()
-        guard case .run(let argv, let title, let debug)? = nextMessage(socketFD, &decoder), !argv.isEmpty else {
+        guard case .run(let argv, let title, let debug, let holdQuickFailure, let keepOpen)? = nextMessage(socketFD, &decoder), !argv.isEmpty else {
             die("the master window went away before starting this session")
         }
 
@@ -39,6 +44,9 @@ enum Slave {
             writeAll(1, "csshm: \(argv.map(ShellWords.quote).joined(separator: " "))\r\n")
         }
 
+        Slave.holdQuickFailure = holdQuickFailure
+        Slave.keepOpen = keepOpen
+        Slave.started = Date()
         let child = spawn(argv)
         signal(SIGINT, SIG_IGN)
         signal(SIGQUIT, SIG_IGN)
@@ -124,17 +132,22 @@ enum Slave {
 
     /// Called once the command has ended. A failure from ssh itself (status
     /// 255: could not connect, connection lost) keeps the window open so the
-    /// message can be read; anything else just exits.
+    /// message can be read. So does a command template that fails within a
+    /// few seconds, since that means it never got going. With
+    /// `--remote_command_keepalive` the window stays open however the command
+    /// ended, so its output can be read. Anything else exits.
     private static func finish(code: Int32, socketFD: Int32) -> Never {
         lock.lock()
         let quit = quitRequested
         ended = true
         lock.unlock()
-        if quit || code != 255 {
+        let failedAtOnce = holdQuickFailure && code != 0 && Date().timeIntervalSince(started) < quickFailure
+        if quit || !(keepOpen || code == 255 || failedAtOnce) {
             exit(code)
         }
         writeAll(socketFD, Message.exited(status: code).encoded())
-        writeAll(1, "\r\n[csshm: this session ended with an error. Press Enter here to close the window.]\r\n")
+        let what = code == 0 ? "the command finished" : "this session ended with an error"
+        writeAll(1, "\r\n[csshm: \(what). Press Enter here to close the window.]\r\n")
         usleep(200_000)
         tcflush(0, TCIFLUSH)
         var byte: UInt8 = 0

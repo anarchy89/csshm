@@ -30,6 +30,10 @@ public struct SessionConfig: Codable, Equatable, Sendable {
     /// Font size for the host windows.
     public var fontSize: Int?
     public var colors = SessionColors()
+    /// When set, each window runs this in place of ssh.
+    public var commandTemplate: CommandTemplate?
+    /// Keep each window open after its command ends, so the output can be read.
+    public var keepOpen = false
 
     public init(executable: String, hosts: [HostSpec], login: String?, ssh: String, sshArgs: [String],
                 remoteCommand: String, screens: [Int], tileX: Int, tileY: Int, masterHeight: Int = 87, debug: Int, logFile: String? = nil, pretendScreens: Int? = nil) {

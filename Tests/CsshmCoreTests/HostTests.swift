@@ -211,6 +211,13 @@ final class OptionsTests: XCTestCase {
     func testAbbreviations() throws {
         XCTAssertEqual(try Options(arguments: ["--scr", "2", "h"]).screen, "2")
         XCTAssertEqual(try Options(arguments: ["--remote", "uptime", "h"]).remoteCommand, "uptime")
+        XCTAssertFalse(try Options(arguments: ["--remote", "uptime", "h"]).keepOpen)
+        XCTAssertFalse(try Options(arguments: ["--remote_command", "uptime", "h"]).keepOpen)
+        let kept = try Options(arguments: ["--remote_command_keepalive", "df -h", "h"])
+        XCTAssertEqual(kept.remoteCommand, "df -h")
+        XCTAssertTrue(kept.keepOpen)
+        XCTAssertEqual(kept.hosts, ["h"])
+        XCTAssertTrue(try Options(arguments: ["--remote_command_k=uptime", "h"]).keepOpen)
         XCTAssertThrowsError(try Options(arguments: ["--s", "2"])) { error in
             guard case .ambiguousOption = error as? OptionsError else { return XCTFail("\(error)") }
         }

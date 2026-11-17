@@ -29,6 +29,10 @@ public struct Options: Equatable, Sendable {
     /// Program to run instead of ssh; `nil` when not given.
     public var ssh: String?
     public var remoteCommand: String = ""
+    /// Keep each window open after its command ends (`--remote_command_keepalive`).
+    public var keepOpen = false
+    /// A command template to run in each window in place of ssh.
+    public var command: String?
     public var tileX: Int = 0
     public var tileY: Int = 0
     public var hostsFiles: [String] = []
@@ -72,6 +76,8 @@ public struct Options: Equatable, Sendable {
         Spec(names: ["ssh_args"], kind: .string),
         Spec(names: ["ssh"], kind: .string),
         Spec(names: ["remote_command"], kind: .string),
+        Spec(names: ["remote_command_keepalive"], kind: .string),
+        Spec(names: ["command"], kind: .string),
         Spec(names: ["tile_x", "x"], kind: .int),
         Spec(names: ["tile_y", "y"], kind: .int),
         Spec(names: ["hosts", "addresses"], kind: .string),
@@ -107,6 +113,11 @@ public struct Options: Equatable, Sendable {
         }
         let matches = specs.filter { $0.names[0].hasPrefix(name) }
         if matches.count == 1 { return matches[0] }
+        // "--remote" still means --remote_command, though a longer option begins the same way.
+        if let shortest = matches.min(by: { $0.names[0].count < $1.names[0].count }),
+           matches.allSatisfy({ $0.names[0].hasPrefix(shortest.names[0]) }) {
+            return shortest
+        }
         if matches.isEmpty { throw OptionsError.unknownOption(shown) }
         throw OptionsError.ambiguousOption(shown, matches.map { $0.names[0] })
     }
@@ -182,6 +193,10 @@ public struct Options: Equatable, Sendable {
             case "list_clusters": listClusters = true
             case "update": update = true
             case "remote_command": remoteCommand = value ?? ""
+            case "remote_command_keepalive":
+                remoteCommand = value ?? ""
+                keepOpen = true
+            case "command": command = value
             case "tile_x": tileX = max(0, number ?? 0)
             case "tile_y": tileY = max(0, number ?? 0)
             case "hosts": hostsFiles.append(value ?? "")

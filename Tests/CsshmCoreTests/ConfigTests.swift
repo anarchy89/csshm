@@ -56,6 +56,66 @@ final class TomlTests: XCTestCase {
     }
 }
 
+final class CommandTemplateTests: XCTestCase {
+    private func argv(_ template: String, _ host: String, login: String? = nil) throws -> [String] {
+        try CommandTemplate(parsing: template).command(for: try HostSpec(parsing: host), login: login)
+    }
+
+    func testContainersAndPods() throws {
+        XCTAssertEqual(try argv("docker exec -it {} sh", "web-1"), ["docker", "exec", "-it", "web-1", "sh"])
+        XCTAssertEqual(try argv("kubectl exec -it {} -- sh", "api-7d9f-x2k"), ["kubectl", "exec", "-it", "api-7d9f-x2k", "--", "sh"])
+        XCTAssertEqual(try argv("kubectl -n prod exec -it pod/{} -- bash", "api-1"), ["kubectl", "-n", "prod", "exec", "-it", "pod/api-1", "--", "bash"])
+    }
+
+    func testQuotedWordsStayTogether() throws {
+        XCTAssertEqual(
+            try argv("sh -c 'echo connecting to {}; exec nc {} 23'", "sw1"),
+            ["sh", "-c", "echo connecting to sw1; exec nc sw1 23"])
+    }
+
+    func testUserAndPort() throws {
+        XCTAssertEqual(try argv("mosh --ssh='ssh -p {port}' {user}@{}", "admin@box:2200"), ["mosh", "--ssh=ssh -p 2200", "admin@box"])
+        XCTAssertEqual(try argv("tool --as {user} {}", "box", login: "ubuntu"), ["tool", "--as", "ubuntu", "box"])
+        XCTAssertEqual(try argv("tool --as {user} {}", "root,box", login: "ubuntu"), ["tool", "--as", "root", "box"])
+    }
+
+    func testRejectsBadTemplates() {
+        for bad in ["", "   ", "docker exec -it sh", "{} exec", "docker exec 'oops {}", "{user} {}"] {
+            XCTAssertThrowsError(try CommandTemplate(parsing: bad), bad) { XCTAssertTrue($0 is ConfigError, bad) }
+        }
+    }
+
+    func testChecksWhatAHostMustSupply() throws {
+        let plain = try CommandTemplate(parsing: "docker exec -it {} sh")
+        XCTAssertNoThrow(try plain.check(try HostSpec(parsing: "web"), login: nil))
+        XCTAssertThrowsError(try plain.check(try HostSpec(parsing: "u,web,~/.ssh/key"), login: nil), "a key only applies to ssh")
+        XCTAssertThrowsError(try plain.check(try HostSpec(parsing: "web", command: "uptime"), login: nil), "a per-host command only applies to ssh")
+
+        let needsUser = try CommandTemplate(parsing: "tool {user}@{}")
+        XCTAssertThrowsError(try needsUser.check(try HostSpec(parsing: "web"), login: nil))
+        XCTAssertNoThrow(try needsUser.check(try HostSpec(parsing: "web"), login: "ubuntu"))
+        XCTAssertNoThrow(try needsUser.check(try HostSpec(parsing: "me@web"), login: nil))
+
+        let needsPort = try CommandTemplate(parsing: "nc {} {port}")
+        XCTAssertThrowsError(try needsPort.check(try HostSpec(parsing: "web"), login: nil))
+        XCTAssertNoThrow(try needsPort.check(try HostSpec(parsing: "web:23"), login: nil))
+    }
+
+    /// A host name cannot smuggle extra words or shell syntax into the command.
+    func testHostNamesCannotInjectArguments() {
+        for hostile in ["web;reboot", "web --privileged", "$(id)", "web`id`"] {
+            XCTAssertThrowsError(try HostSpec(parsing: hostile), hostile)
+        }
+    }
+
+    func testSettingsFileAndOption() throws {
+        XCTAssertEqual(try UserConfig(parsing: "command = \"docker exec -it {} sh\"").command, "docker exec -it {} sh")
+        XCTAssertThrowsError(try UserConfig(parsing: "command = \"docker ps\""), "no placeholder")
+        XCTAssertEqual(try Options(arguments: ["--command", "docker exec -it {} sh", "web"]).command, "docker exec -it {} sh")
+        XCTAssertEqual(try Options(arguments: ["--com=x {}", "web"]).command, "x {}")
+    }
+}
+
 final class UserConfigTests: XCTestCase {
     func testFullFile() throws {
         let config = try UserConfig(parsing: """

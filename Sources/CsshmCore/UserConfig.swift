@@ -77,6 +77,8 @@ public struct UserConfig: Equatable, Sendable {
     public var ssh: String?
     public var screen: String?
     public var remoteCommand: String?
+    /// A command template to run in each window in place of ssh.
+    public var command: String?
     public var tileX: Int?
     public var tileY: Int?
     public var menuKey: UInt8?
@@ -114,6 +116,9 @@ public struct UserConfig: Equatable, Sendable {
             case "ssh_args": sshArgs = try string(key, value)
             case "ssh": ssh = try string(key, value)
             case "remote_command": remoteCommand = try string(key, value)
+            case "command":
+                command = try string(key, value)
+                _ = try CommandTemplate(parsing: command!)
             case "profile": profile = try string(key, value)
             case "master_profile": masterProfile = try string(key, value)
             case "menu_key": menuKey = try MenuKey.parse(try string(key, value))

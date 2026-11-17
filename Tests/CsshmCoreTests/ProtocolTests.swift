@@ -5,8 +5,12 @@ import XCTest
 final class WireProtocolTests: XCTestCase {
     let samples: [Message] = [
         .hello(id: 7, tty: "/dev/ttys012", pid: 4242),
-        .run(argv: ["ssh", "-o", "User name=x", "-l", "ubuntu", "10.0.0.1", ""], title: "csshm - 10.0.0.1", debug: true),
-        .run(argv: [], title: "", debug: false),
+        .run(argv: ["ssh", "-o", "User name=x", "-l", "ubuntu", "10.0.0.1", ""], title: "csshm - 10.0.0.1", debug: true, holdQuickFailure: false),
+        .run(argv: [], title: "", debug: false, holdQuickFailure: false),
+        .run(argv: ["docker", "exec", "-it", "web", "sh"], title: "csshm - web", debug: false, holdQuickFailure: true),
+        .run(argv: ["x"], title: "t", debug: true, holdQuickFailure: true),
+        .run(argv: ["ssh", "h", "uptime"], title: "t", debug: false, holdQuickFailure: false, keepOpen: true),
+        .run(argv: ["x"], title: "t", debug: true, holdQuickFailure: true, keepOpen: true),
         .input(Array("ls -la\r".utf8)),
         .input([]),
         .input([0, 1, 255, 0x1b]),

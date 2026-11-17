@@ -38,7 +38,13 @@ enum Launcher {
                               a host is a command to run on that host. Both
                               names mean the same and may be repeated.
           --remote_command CMD  command to run on every host
+          --remote_command_keepalive CMD
+                              the same, but each window stays open after the
+                              command finishes so its output can be read
           --ssh COMMAND       program to run instead of ssh
+          --command TEMPLATE  run this in each window in place of ssh, with {}
+                              standing for the host: "docker exec -it {} sh".
+                              {user} and {port} are also available.
       -x, --tile_x N          fixed number of columns on each monitor
       -y, --tile_y N          fixed number of rows on each monitor
           --profile NAME      Terminal profile for the host windows
@@ -93,6 +99,7 @@ enum Launcher {
       csshm --login ubuntu --ssh_args "-i ~/.ssh/key" --addresses servers.txt
       csshm --screen 2-3 --login ubuntu $(< servers.txt)
       cat servers.txt | csshm --login ubuntu
+      csshm --command "docker exec -it {} sh" web db cache
 
     A session that ends closes its window and the rest re-tile. If ssh itself
     fails, the window stays open in grey so the error can be read: press Enter
@@ -161,8 +168,18 @@ enum Launcher {
         let profile = options.profile ?? settings.profile
         let masterProfile = options.masterProfile ?? settings.masterProfile
         let menuKey: UInt8?
+        var template: CommandTemplate?
         do {
+            if let text = options.command ?? settings.command {
+                // Given on the command line, ssh options alongside it are a mistake worth pointing out.
+                if options.command != nil, options.ssh != nil || !options.sshArgs.isEmpty || !options.remoteCommand.isEmpty {
+                    throw ConfigError("--command replaces ssh, so it cannot be combined with --ssh, --ssh_args or --remote_command")
+                }
+                template = try CommandTemplate(parsing: text)
+            }
             hosts = try entries.map { try HostSpec(parsing: $0.name, command: $0.command) }
+            let login = options.login ?? settings.login
+            for host in hosts { try template?.check(host, login: login) }
             sshArgs = try ShellWords.split(options.sshArgs.isEmpty ? (settings.sshArgs ?? "") : options.sshArgs)
             screens = try ScreenSpec(parsing: options.screen.isEmpty ? (settings.screen ?? "") : options.screen)
             try screens.validate(available: max(1, try backend.screens().count))
@@ -201,6 +218,8 @@ enum Launcher {
         config.masterProfile = masterProfile
         config.fontSize = options.fontSize ?? settings.fontSize
         config.colors = settings.colors
+        config.commandTemplate = template
+        config.keepOpen = options.keepOpen
         do {
             let data = try JSONEncoder().encode(config)
             try data.write(to: URL(fileURLWithPath: session + "/config.json"), options: .atomic)

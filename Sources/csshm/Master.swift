@@ -20,7 +20,7 @@ final class HostWindow {
     var shown: (foreground: RGB?, background: RGB?) = (nil, nil)
     /// The user switched input off for this host.
     var disabled = false
-    /// The session ended with an error and the window is showing it.
+    /// The session ended and the window is being kept open to show its output.
     var dead = false
     /// The window's cell in the grid.
     var rect: Rect?
@@ -348,8 +348,11 @@ final class Master {
         host.decoder = decoder
         host.tty = tty
         log("hello from \(host.name) on \(tty)")
-        let argv = host.spec.command(ssh: config.ssh, sshArgs: config.sshArgs, login: config.login, remoteCommand: config.remoteCommand)
-        send(.run(argv: argv, title: "csshm - \(host.name)", debug: debug), to: host)
+        let argv = config.commandTemplate?.command(for: host.spec, login: config.login)
+            ?? host.spec.command(ssh: config.ssh, sshArgs: config.sshArgs, login: config.login, remoteCommand: config.remoteCommand)
+        // ssh reports its own failures with status 255. Other programs have
+        // no such convention, so for them a quick failure counts as one.
+        send(.run(argv: argv, title: "csshm - \(host.name)", debug: debug, holdQuickFailure: config.commandTemplate != nil, keepOpen: config.keepOpen), to: host)
         if resolveAt == nil { resolveAt = Date().addingTimeInterval(0.15) }
         needsRedraw = true
     }
@@ -387,9 +390,9 @@ final class Master {
         host.decoder.feed(buffer[0..<n])
         do {
             while let message = try host.decoder.next() {
-                if case .exited = message {
+                if case .exited(let code) = message {
                     host.dead = true
-                    status = "\(host.name) ended with an error"
+                    status = code == 0 ? "\(host.name) finished" : "\(host.name) ended with an error"
                     refreshColors()
                     needsRedraw = true
                 }
@@ -711,6 +714,7 @@ final class Master {
         let spec: HostSpec
         do {
             spec = try HostSpec(parsing: text)
+            try config.commandTemplate?.check(spec, login: config.login)
         } catch {
             status = "\(error)"
             writeAll(1, "\u{07}")
@@ -875,7 +879,7 @@ final class Master {
             var text = "Typing here goes to \(typing) of \(total) host\(total == 1 ? "" : "s"). \(menuKeyName) opens the menu."
             if waiting > 0 { text += "\nWaiting for \(waiting) window\(waiting == 1 ? "" : "s") to start." }
             if dead > 0 {
-                text += "\n\(dead) ended with an error: press Enter in such a window to close it, or \(menuKeyName) x to close everything."
+                text += "\n\(dead) \(config.keepOpen ? "finished" : "ended with an error"): press Enter in such a window to close it, or \(menuKeyName) x to close everything."
             }
             return text
         case .action:

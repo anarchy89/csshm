@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import Foundation
 
-let csshmVersion = "0.1.4"
+let csshmVersion = "0.1.5"
 
 /// Prints a message to standard error and exits.
 func die(_ message: String, code: Int32 = 1) -> Never {
