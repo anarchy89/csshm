@@ -9,6 +9,8 @@ host. Click a host window and type and it goes only to that host.
 It is written in Swift and inspired by [csshX](https://github.com/brockgr/csshx)
 and by ClusterSSH on Linux. It takes the same command line as csshX.
 
+![Six hosts tiled above the red master window. A command typed once appears in all of them, then one host is disabled and skipped.](docs/overview.gif)
+
 I wrote it because csshX is no longer maintained. It relies on Perl libraries
 that Apple has stopped maintaining on macOS, which leads to some odd bugs.
 
@@ -317,6 +319,15 @@ running. A `g`/`G` adjustment lasts until the number of windows changes.
 If a monitor's resolution changes or a monitor is unplugged while csshm is
 running, press Ctrl-A `r` to re-tile.
 
+The session can be moved while it runs with Ctrl-A `v`. Here one display
+stands in for two monitors side by side: the session starts on the left one,
+moves to the right one, then spreads over both with a grid on each.
+
+![A running session moves from one monitor to the other, then spreads across both.](docs/screens.gif)
+
+Note: so far this has only been tested on a single monitor, split in two for
+this recording. I will record it on real multiple monitors when I have time.
+
 ## The master window and its menu
 
 The red window shows how many hosts your typing is going to. Everything you
@@ -343,6 +354,8 @@ Press Ctrl-A for the menu. Esc leaves it.
 | `v` | Move the session to other monitors. Type a `--screen` value and press Enter |
 | `d` | Save every window's scrollback. Type a base name (under your home folder) or press Enter for `Desktop/csshm_scrollback`. Each host gets `<name>.<host>.txt` |
 | `x` | End every session, close every window and exit |
+
+![The menu shown in the master window after pressing Ctrl-A.](docs/menu.png)
 
 In the prompts that ask for text (`c`, `v`, `d`), Backspace deletes, Ctrl-U
 clears the line and Esc cancels. A key the menu does not know makes a beep.
@@ -377,6 +390,15 @@ flips every host. Ctrl-A `n` enables everything again.
   connection drops, the window stays open with grey text so you can read the
   error. Press Enter in that window to close it.
 - When the last host window has gone, the master window closes too.
+
+Sessions ending one at a time, with the grid reshaping itself each time:
+
+![Nine sessions close one by one and the remaining windows re-tile from 3 by 3 down to 2 by 2.](docs/retile.gif)
+
+A host that could not be reached, kept open in grey so the error can be read:
+
+![Five hosts connected and one showing a connection error in grey text.](docs/failed-host.png)
+
 - If you close the master window, the host windows stay open and carry on as
   ordinary, separate sessions.
 
