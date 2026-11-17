@@ -83,7 +83,14 @@ final class HostSpecTests: XCTestCase {
         for text in bad {
             XCTAssertThrowsError(try HostSpec(parsing: text), text.debugDescription)
         }
-        XCTAssertThrowsError(try HostSpec(parsing: "web1", command: "echo \u{1b}[2J"))
+        XCTAssertThrowsError(try HostSpec(parsing: "web1", command: "echo \u{1b}[2J")) { error in
+            XCTAssertEqual(error as? HostSpecError, .invalidCommand(host: "web1"))
+            XCTAssertEqual("\(error)", "Bad command for host [web1]: it contains a control character")
+        }
+        // A bad host with a bad command is reported as the bad host.
+        XCTAssertThrowsError(try HostSpec(parsing: "web;1", command: "echo \u{1b}[2J")) { error in
+            XCTAssertEqual(error as? HostSpecError, .invalid("web;1"))
+        }
     }
 
     func testErrorMessageDoesNotRepeatControlCharacters() {

@@ -2,6 +2,8 @@
 
 public enum HostSpecError: Error, Equatable, CustomStringConvertible {
     case invalid(String)
+    /// The command given for a host in a hosts file cannot be used.
+    case invalidCommand(host: String)
 
     public var description: String {
         switch self {
@@ -12,6 +14,8 @@ public enum HostSpecError: Error, Equatable, CustomStringConvertible {
                 $0.value < 0x20 || (0x7f...0x9f).contains($0.value) ? "?" : $0
             }))
             return "Bad host [\(shown)]"
+        case .invalidCommand(let host):
+            return "Bad command for host [\(host)]: it contains a control character"
         }
     }
 }
@@ -123,7 +127,10 @@ public struct HostSpec: Equatable, Codable, Sendable {
             }
         }
         if let c = command {
-            guard !c.unicodeScalars.contains(where: HostSpec.isControl) else { throw HostSpecError.invalid(text) }
+            // The host itself has passed every check above, so it is safe to name.
+            guard !c.unicodeScalars.contains(where: HostSpec.isControl) else {
+                throw HostSpecError.invalidCommand(host: trimmed)
+            }
         }
         if let p = port {
             guard !p.isEmpty, p.allSatisfy({ $0.isASCII && $0.isNumber }) else { throw HostSpecError.invalid(text) }
