@@ -62,12 +62,25 @@ open it until you clear the download mark:
 
     xattr -d com.apple.quarantine csshm
 
+### With Homebrew
+
+    brew tap anarchy89/tap
+    brew trust anarchy89/tap
+    brew install csshm
+
+`brew trust` is needed on Homebrew 7 and later, which does not load formulae
+from a tap until you say you trust it. On older versions leave that line out.
+Homebrew builds csshm from source, so Xcode must be installed.
+
+Update with `brew upgrade csshm` and remove with `brew uninstall csshm`.
+
 ### Update
 
     csshm --update
 
 This checks the latest release and replaces the installed csshm if the
-release is newer. It asks for your password when the folder needs it.
+release is newer. It asks for your password when the folder needs it. A
+copy installed with Homebrew is updated with `brew upgrade csshm` instead.
 
 ### Uninstall
 
@@ -85,8 +98,6 @@ This needs Xcode or the Swift toolchain.
     cd csshm
     swift build -c release
     sudo cp .build/release/csshm /usr/local/bin/
-
-A Homebrew tap is planned.
 
 ## Quick start
 
