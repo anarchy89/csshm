@@ -1,0 +1,7 @@
+plan.md
+.build/
+.swiftpm/
+*.xcodeproj
+.DS_Store
+tools/
+.vscode/
