@@ -557,6 +557,24 @@ The last column is the whole free area of that monitor, written the way
 `--bounds` takes it. Use it as it is or shrink it: the left half of monitor 1
 above is `1:0,30-1720,1440`. A monitor macOS has no name for shows `-`.
 
+The free area is smaller than the monitor wherever the menu bar or the Dock
+takes room:
+
+- Every area above starts at 30 down, not 0, because the menu bar is across
+  the top. On the MacBook's own screen it is 33, the height of the strip
+  beside the camera notch.
+- Monitor 4 is 1080 high but its area ends at 990, because the Dock is along
+  the bottom of that monitor and takes the last 90 points.
+
+These follow your settings. With both the Dock and the menu bar set to hide
+automatically, the free area is the whole monitor, the same as its size,
+except on a MacBook's own screen, which has a camera notch. Monitor 4 would
+show `4:0,0-1920,1080`. The MacBook's screen would still start about 32
+down, because macOS keeps windows out of the strip beside the notch even
+with the menu bar hidden. With only the Dock hidden, monitor 4 would show
+`4:0,30-1920,1080`. Run `--list_screens` again after changing either
+setting.
+
 - The numbers are points measured from the top-left corner of that monitor,
   not of the whole desktop. On a Retina display a point is two pixels, so
   these are the sizes macOS shows in System Settings, not the panel's pixel
