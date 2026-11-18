@@ -9,7 +9,7 @@ public enum ShellWordsError: Error, Equatable, CustomStringConvertible {
 public enum ShellWords {
     /// Splits a string into words the way a POSIX shell would: whitespace
     /// separates words, single quotes are literal, double quotes allow
-    /// backslash escapes, and a backslash outside quotes escapes one
+    /// backslash escapes and a backslash outside quotes escapes one
     /// character. Nothing is expanded, so `~` and `$HOME` pass through.
     public static func split(_ text: String) throws -> [String] {
         var words: [String] = []

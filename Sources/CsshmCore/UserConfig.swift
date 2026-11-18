@@ -63,7 +63,7 @@ public enum MenuKey {
 
 /// A named group of hosts.
 public enum Cluster: Equatable, Sendable {
-    /// Hosts, or the names of other clusters.
+    /// Hosts or the names of other clusters.
     case hosts([String])
     /// A hosts file, in the same format `--addresses` reads.
     case file(String)
@@ -79,6 +79,8 @@ public struct UserConfig: Equatable, Sendable {
     public var remoteCommand: String?
     /// A command template to run in each window in place of ssh.
     public var command: String?
+    /// Variables to pass to every host window, each `NAME` or `NAME=VALUE`.
+    public var env: [String] = []
     public var tileX: Int?
     public var tileY: Int?
     public var menuKey: UInt8?
@@ -119,6 +121,12 @@ public struct UserConfig: Equatable, Sendable {
             case "command":
                 command = try string(key, value)
                 _ = try CommandTemplate(parsing: command!)
+            case "env":
+                guard case .array(let items) = value else { throw ConfigError("env must be a list, for example [\"AWS_PROFILE\"]") }
+                env = try items.map { try string(key, $0) }
+                for item in env where !PassedEnvironment.isName(PassedEnvironment.name(of: item)) {
+                    throw ConfigError("env: [\(item)] is not a variable name. Use NAME or NAME=VALUE")
+                }
             case "profile": profile = try string(key, value)
             case "master_profile": masterProfile = try string(key, value)
             case "menu_key": menuKey = try MenuKey.parse(try string(key, value))

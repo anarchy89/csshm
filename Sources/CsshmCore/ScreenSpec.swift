@@ -26,7 +26,7 @@ public struct ScreenSpec: Equatable, Sendable, CustomStringConvertible {
         self.screens = screens
     }
 
-    /// Parses `3`, `2-4` (every screen from 2 to 4) or `1,3`, and mixes of
+    /// Parses `3`, `2-4` (every screen from 2 to 4) or `1,3` and mixes of
     /// those. An empty string or `0` means the primary screen.
     public init(parsing text: String) throws {
         let trimmed = text.filter { !$0.isWhitespace }

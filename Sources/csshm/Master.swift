@@ -41,7 +41,7 @@ final class HostWindow {
 }
 
 /// The red window. It reads the keyboard, sends what is typed to every
-/// enabled host, runs the Ctrl-A menu, and keeps the windows tiled.
+/// enabled host, runs the Ctrl-A menu and keeps the windows tiled.
 final class Master {
     private let session: String
     private let config: SessionConfig
@@ -86,6 +86,8 @@ final class Master {
             die("cannot read the session in \(session)")
         }
         self.config = config
+        // --env values may be secrets and nothing reads this file again.
+        if !config.environment.isEmpty { unlink(session + "/config.json") }
         self.backend = TerminalBackend(pretendScreens: config.pretendScreens)
         self.debug = config.debug > 0
         self.machine = ControlMachine(actionKey: config.menuKey ?? 0x01)
@@ -352,7 +354,7 @@ final class Master {
             ?? host.spec.command(ssh: config.ssh, sshArgs: config.sshArgs, login: config.login, remoteCommand: config.remoteCommand)
         // ssh reports its own failures with status 255. Other programs have
         // no such convention, so for them a quick failure counts as one.
-        send(.run(argv: argv, title: "csshm - \(host.name)", debug: debug, holdQuickFailure: config.commandTemplate != nil, keepOpen: config.keepOpen), to: host)
+        send(.run(argv: argv, title: "csshm - \(host.name)", debug: debug, holdQuickFailure: config.commandTemplate != nil, keepOpen: config.keepOpen, environment: config.environment), to: host)
         if resolveAt == nil { resolveAt = Date().addingTimeInterval(0.15) }
         needsRedraw = true
     }
@@ -487,7 +489,7 @@ final class Master {
         }
         // New windows take the keyboard; give it back to the master.
         if let window = masterWindow { apply([.raise(window: window)]) }
-        // Windows that were already open move to their new cells, and the
+        // Windows that were already open move to their new cells and the
         // master takes its final place. Windows already in place are skipped.
         retile(raise: false)
         needsRedraw = true
@@ -879,7 +881,7 @@ final class Master {
             var text = "Typing here goes to \(typing) of \(total) host\(total == 1 ? "" : "s"). \(menuKeyName) opens the menu."
             if waiting > 0 { text += "\nWaiting for \(waiting) window\(waiting == 1 ? "" : "s") to start." }
             if dead > 0 {
-                text += "\n\(dead) \(config.keepOpen ? "finished" : "ended with an error"): press Enter in such a window to close it, or \(menuKeyName) x to close everything."
+                text += "\n\(dead) \(config.keepOpen ? "finished" : "ended with an error"): press Enter in such a window to close it or \(menuKeyName) x to close everything."
             }
             return text
         case .action:

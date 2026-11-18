@@ -72,7 +72,7 @@ final class ScreenGeometryTests: XCTestCase {
 final class GridLayoutTests: XCTestCase {
     /// Four monitors around a desk: one left of the primary, one right, one
     /// above, with different sizes. Every window must sit wholly on one
-    /// monitor, and the master on the first monitor asked for.
+    /// monitor and the master on the first monitor asked for.
     func testMixedMonitorsWithNegativeCoordinates() {
         let left = Rect(x: -2560, y: -360, width: 2560, height: 1440)
         let primary = Rect(x: 0, y: 25, width: 1920, height: 985)

@@ -24,7 +24,7 @@ enum Launcher {
       [ipv6]:port             [fe80::1]:2222 (a bare fe80::1 also works)
 
       A user written with a host wins over --login. Hosts can be given as
-      arguments, in files, or on standard input when no other hosts are named.
+      arguments, in files or on standard input when no other hosts are named.
       A cluster is a named group of hosts from the settings file.
 
     OPTIONS
@@ -42,6 +42,10 @@ enum Launcher {
                               the same, but each window stays open after the
                               command finishes so its output can be read
           --ssh COMMAND       program to run instead of ssh
+          --env NAME          pass this environment variable from the shell you
+          --env NAME=VALUE    are in to every host window or set one. Host
+                              windows are new Terminal windows and do not see
+                              what you exported here. May be repeated.
           --command TEMPLATE  run this in each window in place of ssh, with {}
                               standing for the host: "docker exec -it {} sh".
                               {user} and {port} are also available.
@@ -53,18 +57,18 @@ enum Launcher {
           --menu_key KEY      key that opens the menu, for example ctrl-b
           --config FILE       settings file to read instead of the default
           --list_clusters     print the cluster names and exit
-          --debug             show the command each window runs, and leave
+          --debug             show the command each window runs and leave
                               windows open when their session ends
           --update            replace this csshm with the latest release
       -h, --help              show this help
       -v, --version           show the version
 
       Options may be written --name VALUE or --name=VALUE, with one dash or
-      two, and shortened to any unique prefix (--scr 2).
+      two and shortened to any unique prefix (--scr 2).
 
     MENU (Ctrl-A in the master window; Esc goes back)
       Ctrl-A   send a real Ctrl-A to the hosts
-      r        re-tile, and bring back hidden or minimised windows
+      r        re-tile and bring back hidden or minimised windows
       c        add a host
       e        pick windows: arrows or h/j/k/l to move, then e enable,
                d disable, t toggle, o only this one, O only this one, zoomed
@@ -169,7 +173,11 @@ enum Launcher {
         let masterProfile = options.masterProfile ?? settings.masterProfile
         let menuKey: UInt8?
         var template: CommandTemplate?
+        let passed: [String]
         do {
+            passed = PassedEnvironment.merge(
+                try PassedEnvironment.resolve(settings.env, from: environment, required: false),
+                try PassedEnvironment.resolve(options.env, from: environment, required: true))
             if let text = options.command ?? settings.command {
                 // Given on the command line, ssh options alongside it are a mistake worth pointing out.
                 if options.command != nil, options.ssh != nil || !options.sshArgs.isEmpty || !options.remoteCommand.isEmpty {
@@ -220,9 +228,11 @@ enum Launcher {
         config.colors = settings.colors
         config.commandTemplate = template
         config.keepOpen = options.keepOpen
+        config.environment = passed
         do {
             let data = try JSONEncoder().encode(config)
             try data.write(to: URL(fileURLWithPath: session + "/config.json"), options: .atomic)
+            chmod(session + "/config.json", 0o600)
             _ = try backend.openWindows([
                 WindowRequest(command: SessionConfig.roleCommand(executable: config.executable, role: "master", session: session)),
             ])
@@ -237,7 +247,7 @@ enum Launcher {
     static let defaultSettingsPath = "~/.config/csshm/config.toml"
 
     /// Reads the settings file: the one named with --config, which must
-    /// exist, or else the default one if it is there.
+    /// exist or else the default one if it is there.
     private static func loadSettings(_ options: Options) -> UserConfig {
         let path = ((options.config ?? defaultSettingsPath) as NSString).expandingTildeInPath
         guard let data = FileManager.default.contents(atPath: path) else {

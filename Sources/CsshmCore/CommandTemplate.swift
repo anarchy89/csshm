@@ -4,12 +4,12 @@
 /// placeholders for the target: `docker exec -it {} sh`.
 ///
 ///     {}       the host name
-///     {user}   the user given with the host, or the --login user
+///     {user}   the user given with the host or the --login user
 ///     {port}   the port given with the host
 ///
-/// The template is split into words the way a shell would, and the words are
+/// The template is split into words the way a shell would and the words are
 /// run directly, with no shell in between. A placeholder may sit inside a
-/// word (`pod/{}`), and stays one word whatever the host is called.
+/// word (`pod/{}`) and stays one word whatever the host is called.
 public struct CommandTemplate: Equatable, Codable, Sendable {
     public let words: [String]
 
@@ -35,7 +35,7 @@ public struct CommandTemplate: Equatable, Codable, Sendable {
     public var usesUser: Bool { words.contains { $0.contains("{user}") } }
     public var usesPort: Bool { words.contains { $0.contains("{port}") } }
 
-    /// Checks that a host supplies everything the template asks for, and
+    /// Checks that a host supplies everything the template asks for and
     /// nothing that only makes sense for ssh.
     public func check(_ host: HostSpec, login: String?) throws {
         if usesUser, (host.user ?? login ?? "").isEmpty {

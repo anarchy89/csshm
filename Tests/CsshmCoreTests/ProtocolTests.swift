@@ -11,6 +11,7 @@ final class WireProtocolTests: XCTestCase {
         .run(argv: ["x"], title: "t", debug: true, holdQuickFailure: true),
         .run(argv: ["ssh", "h", "uptime"], title: "t", debug: false, holdQuickFailure: false, keepOpen: true),
         .run(argv: ["x"], title: "t", debug: true, holdQuickFailure: true, keepOpen: true),
+        .run(argv: ["ssh", "i-0518"], title: "t", debug: false, holdQuickFailure: false, environment: ["AWS_PROFILE=prod", "EMPTY=", "X=a=b c"]),
         .input(Array("ls -la\r".utf8)),
         .input([]),
         .input([0, 1, 255, 0x1b]),

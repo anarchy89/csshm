@@ -24,7 +24,7 @@ public struct SessionConfig: Codable, Equatable, Sendable {
     public var pretendScreens: Int?
     /// The byte the menu key sends; Ctrl-A when absent.
     public var menuKey: UInt8?
-    /// Terminal profile for the host windows, and for the master window.
+    /// Terminal profile for the host windows and for the master window.
     public var profile: String?
     public var masterProfile: String?
     /// Font size for the host windows.
@@ -34,6 +34,8 @@ public struct SessionConfig: Codable, Equatable, Sendable {
     public var commandTemplate: CommandTemplate?
     /// Keep each window open after its command ends, so the output can be read.
     public var keepOpen = false
+    /// `NAME=VALUE` entries to set for the command in each window (`--env`).
+    public var environment: [String] = []
 
     public init(executable: String, hosts: [HostSpec], login: String?, ssh: String, sshArgs: [String],
                 remoteCommand: String, screens: [Int], tileX: Int, tileY: Int, masterHeight: Int = 87, debug: Int, logFile: String? = nil, pretendScreens: Int? = nil) {

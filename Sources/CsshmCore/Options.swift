@@ -21,7 +21,7 @@ public enum OptionsError: Error, Equatable, CustomStringConvertible {
 
 /// Command-line options. The names follow csshX so existing scripts keep
 /// working: long options take one or two dashes, a value follows as the next
-/// argument or after `=`, and unique abbreviations are accepted.
+/// argument or after `=` and unique abbreviations are accepted.
 public struct Options: Equatable, Sendable {
     public var login: String?
     public var screen: String = ""
@@ -36,10 +36,12 @@ public struct Options: Equatable, Sendable {
     public var tileX: Int = 0
     public var tileY: Int = 0
     public var hostsFiles: [String] = []
+    /// `--env` values, each `NAME` or `NAME=VALUE`.
+    public var env: [String] = []
     public var debug: Int = 0
     /// Settings file to read instead of the default one.
     public var config: String?
-    /// Terminal profile for the host windows, and for the master window.
+    /// Terminal profile for the host windows and for the master window.
     public var profile: String?
     public var masterProfile: String?
     public var fontSize: Int?
@@ -78,6 +80,7 @@ public struct Options: Equatable, Sendable {
         Spec(names: ["remote_command"], kind: .string),
         Spec(names: ["remote_command_keepalive"], kind: .string),
         Spec(names: ["command"], kind: .string),
+        Spec(names: ["env"], kind: .string),
         Spec(names: ["tile_x", "x"], kind: .int),
         Spec(names: ["tile_y", "y"], kind: .int),
         Spec(names: ["hosts", "addresses"], kind: .string),
@@ -197,6 +200,7 @@ public struct Options: Equatable, Sendable {
                 remoteCommand = value ?? ""
                 keepOpen = true
             case "command": command = value
+            case "env": env.append(value ?? "")
             case "tile_x": tileX = max(0, number ?? 0)
             case "tile_y": tileY = max(0, number ?? 0)
             case "hosts": hostsFiles.append(value ?? "")

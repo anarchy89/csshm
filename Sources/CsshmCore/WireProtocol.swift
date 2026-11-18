@@ -14,9 +14,10 @@ public enum Message: Equatable, Sendable {
     case hello(id: UInt32, tty: String, pid: Int32)
     /// Master to host process: the command to run in the window. With
     /// `holdQuickFailure`, a command that fails within its first few seconds
-    /// is treated as never having started, and the window is kept open.
+    /// is treated as never having started and the window is kept open.
     /// With `keepOpen`, the window is kept open however the command ends.
-    case run(argv: [String], title: String, debug: Bool, holdQuickFailure: Bool, keepOpen: Bool = false)
+    /// `environment` holds `NAME=VALUE` entries to set for the command.
+    case run(argv: [String], title: String, debug: Bool, holdQuickFailure: Bool, keepOpen: Bool = false, environment: [String] = [])
     /// Master to host process: bytes to feed to the terminal as typed input.
     case input([UInt8])
     /// Host process to master: the command ended with an error and the
@@ -44,11 +45,13 @@ public enum Message: Equatable, Sendable {
             Message.put(UInt32(id), into: &payload)
             Message.put(UInt32(bitPattern: pid), into: &payload)
             Message.put(tty, into: &payload)
-        case .run(let argv, let title, let debug, let holdQuickFailure, let keepOpen):
+        case .run(let argv, let title, let debug, let holdQuickFailure, let keepOpen, let environment):
             payload.append((debug ? 1 : 0) | (holdQuickFailure ? 2 : 0) | (keepOpen ? 4 : 0))
             Message.put(title, into: &payload)
             Message.put(UInt32(argv.count), into: &payload)
             for word in argv { Message.put(word, into: &payload) }
+            Message.put(UInt32(environment.count), into: &payload)
+            for entry in environment { Message.put(entry, into: &payload) }
         case .input(let bytes):
             payload = bytes
         case .exited(let status):
@@ -77,7 +80,11 @@ public enum Message: Equatable, Sendable {
             guard count <= payload.count else { throw WireError.malformed }
             var argv: [String] = []
             for _ in 0..<count { argv.append(try reader.string()) }
-            return .run(argv: argv, title: title, debug: flags & 1 != 0, holdQuickFailure: flags & 2 != 0, keepOpen: flags & 4 != 0)
+            let entries = Int(try reader.uint32())
+            guard entries <= payload.count else { throw WireError.malformed }
+            var environment: [String] = []
+            for _ in 0..<entries { environment.append(try reader.string()) }
+            return .run(argv: argv, title: title, debug: flags & 1 != 0, holdQuickFailure: flags & 2 != 0, keepOpen: flags & 4 != 0, environment: environment)
         case 3:
             return .input(payload)
         case 4:
@@ -141,7 +148,7 @@ public struct MessageDecoder: Sendable {
         buffer += bytes
     }
 
-    /// The next complete message, or `nil` if more bytes are needed.
+    /// The next complete message or `nil` if more bytes are needed.
     public mutating func next() throws -> Message? {
         guard buffer.count >= 5 else { return nil }
         let length = buffer[1..<5].reduce(0) { $0 << 8 | Int($1) }

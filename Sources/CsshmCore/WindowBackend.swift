@@ -56,7 +56,7 @@ public enum WindowOp: Equatable, Sendable {
 public protocol WindowBackend {
     /// Visible frames of the attached displays, primary display first.
     func screens() throws -> [Rect]
-    /// Opens one new window per request, in order, and returns each one's
+    /// Opens one new window per request, in order and returns each one's
     /// id (`nil` where it could not be found out).
     func openWindows(_ requests: [WindowRequest]) throws -> [Int?]
     func listWindows() throws -> [WindowInfo]

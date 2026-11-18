@@ -3,7 +3,7 @@ import Foundation
 import CsshmCore
 
 /// The process in each host window. It asks the master what to run, starts
-/// it on this terminal, and from then on feeds every byte the master sends
+/// it on this terminal and from then on feeds every byte the master sends
 /// into the terminal's input queue, where the command reads it as typing.
 enum Slave {
     /// TIOCSTI: "simulate terminal input".
@@ -34,7 +34,7 @@ enum Slave {
         writeAll(socketFD, Message.hello(id: UInt32(id), tty: tty, pid: getpid()).encoded())
 
         var decoder = MessageDecoder()
-        guard case .run(let argv, let title, let debug, let holdQuickFailure, let keepOpen)? = nextMessage(socketFD, &decoder), !argv.isEmpty else {
+        guard case .run(let argv, let title, let debug, let holdQuickFailure, let keepOpen, let environment)? = nextMessage(socketFD, &decoder), !argv.isEmpty else {
             die("the master window went away before starting this session")
         }
 
@@ -44,6 +44,15 @@ enum Slave {
             writeAll(1, "csshm: \(argv.map(ShellWords.quote).joined(separator: " "))\r\n")
         }
 
+        // --env: the command inherits these from this process.
+        for entry in environment {
+            let name = PassedEnvironment.name(of: entry)
+            setenv(name, String(entry.dropFirst(name.count + 1)), 1)
+        }
+        if debug && !environment.isEmpty {
+            // Names only: the values may be secrets.
+            writeAll(1, "csshm: with \(environment.map(PassedEnvironment.name(of:)).joined(separator: ", ")) set\r\n")
+        }
         Slave.holdQuickFailure = holdQuickFailure
         Slave.keepOpen = keepOpen
         Slave.started = Date()

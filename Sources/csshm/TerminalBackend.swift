@@ -189,7 +189,7 @@ final class TerminalBackend: WindowBackend {
             lines.append(statement)
             lines.append("end try")
         }
-        /// "window id 5", or for several windows one specifier that covers
+        /// "window id 5" or for several windows one specifier that covers
         /// them all, so Terminal changes them in a single request.
         func target(_ ids: [Int]) -> String {
             ids.count == 1

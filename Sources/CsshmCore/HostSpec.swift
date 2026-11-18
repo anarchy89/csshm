@@ -105,7 +105,7 @@ public struct HostSpec: Equatable, Codable, Sendable {
             host = String(rest[..<colon])
             port = String(rest[rest.index(after: colon)...])
         } else {
-            // No colon, or several: a plain name or a bare IPv6 address.
+            // No colon or several: a plain name or a bare IPv6 address.
             host = String(rest)
         }
 

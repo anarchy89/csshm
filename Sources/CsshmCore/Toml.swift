@@ -16,8 +16,8 @@ public struct TomlError: Error, Equatable, CustomStringConvertible {
 }
 
 /// A reader for the part of TOML that a settings file needs: `key = value`
-/// lines, `[table]` and `[table.subtable]` headers, comments, and values that
-/// are strings, whole numbers, true/false, or lists (which may span lines).
+/// lines, `[table]` and `[table.subtable]` headers, comments and values that
+/// are strings, whole numbers, true/false or lists (which may span lines).
 public enum Toml {
     public static func parse(_ text: String) throws -> [String: TomlValue] {
         var parser = Parser(characters: Array(text))
@@ -38,7 +38,7 @@ public enum Toml {
             position += 1
         }
 
-        /// Skips spaces and tabs, and a comment if one starts here.
+        /// Skips spaces and tabs and a comment if one starts here.
         mutating func skipBlanks() {
             while let ch = current, ch == " " || ch == "\t" || ch == "\r" { advance() }
             if current == "#" {
@@ -94,7 +94,7 @@ public enum Toml {
             let key = path[0]
             if path.count == 1 {
                 if let existing = table[key] {
-                    // Naming a section twice, or after its subsection, is allowed.
+                    // Naming a section twice or after its subsection, is allowed.
                     if case .table = existing, case .table = value { return }
                     throw fail("\(key) is set twice")
                 }
@@ -165,7 +165,7 @@ public enum Toml {
                     items.append(try parseValue())
                     skipLines()
                     if current == "," { advance(); continue }
-                    guard current == "]" else { throw fail("expected , or ] in a list") }
+                    guard current == "]" else { throw fail("expected a comma or ] in a list") }
                 }
             default:
                 var word = ""

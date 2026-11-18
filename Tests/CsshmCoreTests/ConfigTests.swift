@@ -238,3 +238,44 @@ final class UserConfigTests: XCTestCase {
         XCTAssertEqual(colors.hostColors(inactive: false, selected: true).background, Palette.selectedBackground)
     }
 }
+
+final class PassedEnvironmentTests: XCTestCase {
+    let shell = ["AWS_PROFILE": "prod", "AWS_REGION": "eu-west-1", "EMPTY": ""]
+
+    func testNamesTakeTheShellValueAndPairsSetOne() throws {
+        XCTAssertEqual(
+            try PassedEnvironment.resolve(["AWS_PROFILE", "TOKEN=a=b c", "EMPTY"], from: shell, required: true),
+            ["AWS_PROFILE=prod", "TOKEN=a=b c", "EMPTY="])
+        XCTAssertEqual(try PassedEnvironment.resolve([], from: shell, required: true), [])
+    }
+
+    func testLaterEntryWins() throws {
+        XCTAssertEqual(
+            try PassedEnvironment.resolve(["AWS_PROFILE", "AWS_REGION", "AWS_PROFILE=dev"], from: shell, required: true),
+            ["AWS_PROFILE=dev", "AWS_REGION=eu-west-1"])
+    }
+
+    func testUnsetNameIsAnErrorOnlyWhenRequired() throws {
+        XCTAssertThrowsError(try PassedEnvironment.resolve(["NOT_SET"], from: shell, required: true))
+        XCTAssertEqual(try PassedEnvironment.resolve(["NOT_SET", "AWS_REGION"], from: shell, required: false), ["AWS_REGION=eu-west-1"])
+    }
+
+    func testBadNamesAreRefused() {
+        for bad in ["", "=x", "1ABC", "A B", "A-B=1", "A;rm=1", "A\u{1b}[2J"] {
+            XCTAssertThrowsError(try PassedEnvironment.resolve([bad], from: shell, required: false), bad)
+        }
+    }
+
+    func testCommandLineWinsOverSettings() {
+        XCTAssertEqual(
+            PassedEnvironment.merge(["A=1", "B=2"], ["B=3", "C=4"]),
+            ["A=1", "B=3", "C=4"])
+    }
+
+    func testOptionAndSettingsFile() throws {
+        XCTAssertEqual(try Options(arguments: ["--env", "AWS_PROFILE", "--env=X=1", "h"]).env, ["AWS_PROFILE", "X=1"])
+        XCTAssertEqual(try UserConfig(parsing: "env = [\"AWS_PROFILE\", \"X=1\"]").env, ["AWS_PROFILE", "X=1"])
+        XCTAssertThrowsError(try UserConfig(parsing: "env = \"AWS_PROFILE\""))
+        XCTAssertThrowsError(try UserConfig(parsing: "env = [\"A B\"]"))
+    }
+}

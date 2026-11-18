@@ -11,6 +11,40 @@ and by ClusterSSH on Linux. It takes the same command line as csshX.
 
 ![Six hosts tiled above the red master window. A command typed once appears in all of them, then one host is disabled and skipped.](docs/overview.gif)
 
+## Quick start
+
+Install it:
+
+    curl -fsSL https://raw.githubusercontent.com/anarchy89/csshm/main/setup.sh | sh
+
+Open a window for each server:
+
+    csshm web1 web2 web3
+
+Then:
+
+- Type in the red master window and every server receives it.
+- Click a server's window and type to reach only that one.
+- Press Ctrl-A in the red window for the menu. Ctrl-A then `x` closes everything.
+
+The most common variations:
+
+    csshm --login ubuntu web1 web2 web3              # same user on every server
+    csshm --ssh_args "-i ~/.ssh/key" web1 web2       # same key on every server
+    csshm --addresses servers.txt                    # servers from a file, one per line
+    csshm --screen 1-3 --addresses servers.txt       # spread across monitors 1 to 3
+    csshm ubuntu@10.0.0.1 admin@10.0.0.2:2222        # user and port for each server
+
+They can be combined:
+
+    csshm --login ubuntu --ssh_args "-i ~/.ssh/key" --addresses servers.txt
+
+That is all most people need. Run `csshm --help` for a summary or read on for
+the details. Homebrew users can install with `brew` instead: see
+[Install](#install).
+
+## About
+
 I wrote it because csshX is no longer maintained. It relies on Perl libraries
 that Apple has stopped maintaining on macOS, which leads to some odd bugs.
 
@@ -19,12 +53,13 @@ had wide use. Please report problems.
 
 ## Contents
 
+- [Quick start](#quick-start)
 - [Requirements](#requirements)
 - [Install](#install)
-- [Quick start](#quick-start)
 - [Giving hosts](#giving-hosts)
 - [Options](#options)
 - [Containers, pods and other commands](#containers-pods-and-other-commands)
+- [Environment variables](#environment-variables)
 - [Settings file and clusters](#settings-file-and-clusters)
 - [Monitors and the grid](#monitors-and-the-grid)
 - [The master window and its menu](#the-master-window-and-its-menu)
@@ -101,20 +136,6 @@ This needs Xcode or the Swift toolchain.
     cd csshm
     swift build -c release
     sudo cp .build/release/csshm /usr/local/bin/
-
-## Quick start
-
-    csshm web1 web2 web3
-
-Three windows open, tiled, with a red master window along the bottom of the
-screen. Type in the red window and all three hosts receive it. Press Ctrl-A
-then `x` in the red window to close everything.
-
-A more typical use, with one user and one key for a list of servers:
-
-    csshm --login ubuntu --ssh_args "-i ~/.ssh/key" --addresses servers.txt
-
-where `servers.txt` holds one address per line.
 
 ## Giving hosts
 
@@ -195,6 +216,7 @@ One host per line, in any of the forms above.
 | `--remote_command CMD` | Command to run on every host in place of a login shell. The window closes when the command finishes |
 | `--remote_command_keepalive CMD` | The same, but each window stays open after the command finishes so its output can be read. See [When a session ends](#when-a-session-ends) |
 | `--ssh COMMAND` | Program to run instead of `ssh`. It receives the same arguments ssh would |
+| `--env NAME`, `--env NAME=VALUE` | Pass an environment variable from the shell you are in to every host window or set one directly. May be repeated. See [Environment variables](#environment-variables) |
 | `--command TEMPLATE` | Run this in each window in place of ssh, with `{}` standing for the host. See [Containers, pods and other commands](#containers-pods-and-other-commands) |
 | `-x`, `--tile_x N` | Fixed number of columns on each monitor |
 | `-y`, `--tile_y N` | Fixed number of rows on each monitor. Ignored if `--tile_x` is given |
@@ -259,6 +281,38 @@ How the template works:
   it does for a failed ssh connection. Press Enter in it to close it.
 - To make a template the default, put `command = "..."` in the settings file.
 
+## Environment variables
+
+Each host opens in a new Terminal window. A new window starts a fresh shell,
+so ssh there does not see variables you exported in the shell where you ran
+csshm. That matters when ssh depends on one, for example an ssh config that
+reaches AWS instances through Session Manager:
+
+    Host i-*
+      ProxyCommand aws ssm start-session --target %h --document-name AWS-StartSSHSession --parameters "portNumber=22"
+      User ec2-user
+
+`aws` needs your profile or keys, which you set in the shell you are in.
+`--env` carries them to every host window:
+
+    export AWS_PROFILE=prod
+    csshm --env AWS_PROFILE i-0518b235de43acdcd i-0ba5ca0c58dbfeebb
+
+    csshm --env AWS_ACCESS_KEY_ID --env AWS_SECRET_ACCESS_KEY --env AWS_SESSION_TOKEN i-0518b235de43acdcd
+
+- `--env NAME` copies the variable from the shell you are in. If it is not
+  set there, csshm says so and opens nothing.
+- `--env NAME=VALUE` sets a value directly. Prefer the first form for
+  secrets, since a value typed on the command line lands in your shell history.
+- The variable is set for the command in the host window (ssh or your
+  `--command` template) and for hosts added later from the menu. It is not
+  sent to the remote server.
+- To pass the same variables on every run, list them in the settings file:
+  `env = ["AWS_PROFILE", "AWS_REGION"]`. Names listed there that are not set
+  are skipped.
+- Values travel through a file only you can read, in csshm's private session
+  folder. The master window deletes it as soon as it has started.
+
 ## Settings file and clusters
 
 csshm reads `~/.config/csshm/config.toml` if it exists. Every line is
@@ -271,6 +325,7 @@ optional and anything given on the command line wins over the file.
     remote_command = ""
     ssh = "ssh"
     # command = "docker exec -it {} sh"   # run this in place of ssh
+    # env = ["AWS_PROFILE", "AWS_REGION"]   # pass these to every host window
     tile_x = 0                 # 0 means work it out
     tile_y = 0
 
@@ -442,7 +497,7 @@ flips every host. Ctrl-A `n` enables everything again.
       csshm --remote_command_keepalive "df -h /" web1 web2 web3
 
   Finished windows turn grey and stop receiving your typing. Press Enter in
-  one to close it, or use the menu's `x` to close them all.
+  one to close it or use the menu's `x` to close them all.
 - When the last host window has gone, the master window closes too.
 
 Sessions ending one at a time, with the grid reshaping itself each time:

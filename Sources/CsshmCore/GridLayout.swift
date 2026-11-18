@@ -39,7 +39,7 @@ public struct GridLayout: Equatable, Sendable {
     /// The automatic column count for `count` windows. Of the three counts
     /// nearest the square root, it takes the one that leaves the fewest empty
     /// cells. On a tie it prefers more columns for a landscape area, where
-    /// that keeps windows a usable shape, and fewer for a portrait one.
+    /// that keeps windows a usable shape and fewer for a portrait one.
     public static func automaticColumns(for count: Int, landscape: Bool = true) -> Int {
         guard count > 1 else { return 1 }
         var base = 1
@@ -136,7 +136,7 @@ public struct GridLayout: Equatable, Sendable {
     /// Finds the window to move the selection to from `current`, going one
     /// step in the direction (`dx`, `dy`). It works on window positions, so it
     /// crosses between screens naturally. It stays in the same row or column
-    /// where it can, wrapping at the far edge, and otherwise takes the nearest
+    /// where it can, wrapping at the far edge and otherwise takes the nearest
     /// window in that direction.
     public static func neighbor(of current: Int, dx: Int, dy: Int, in rects: [Rect]) -> Int? {
         guard rects.indices.contains(current), rects.count > 1, (dx != 0) != (dy != 0) else { return nil }
