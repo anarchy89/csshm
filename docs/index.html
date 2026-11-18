@@ -113,6 +113,10 @@ brew install csshm</pre>
 csshm --ssh_args "-i ~/.ssh/key" web1 web2       # same key on every server
 csshm --addresses servers.txt                    # servers from a file, one per line
 csshm --screen 1-3 --addresses servers.txt       # spread across monitors 1 to 3</pre>
+  <p>Hosts can also come from another command, such as every EC2 instance that is running:</p>
+  <pre>aws ec2 describe-instances --filters "Name=instance-state-name,Values=running" \
+    --query "Reservations[].Instances[].PrivateIpAddress" --output text \
+    | tr '\t' '\n' | csshm --login ec2-user</pre>
 
   <h2>What it does</h2>
   <ul>

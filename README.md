@@ -44,6 +44,15 @@ They can be combined:
 
     csshm --login ubuntu --ssh_args "-i ~/.ssh/key" --addresses servers.txt
 
+Hosts can also come from another command, such as every EC2 instance that
+is running:
+
+    aws ec2 describe-instances --filters "Name=instance-state-name,Values=running" \
+        --query "Reservations[].Instances[].PrivateIpAddress" --output text \
+        | tr '\t' '\n' | csshm --login ec2-user
+
+More in [Putting options together](#putting-options-together).
+
 That is all most people need. Run `csshm --help` for a summary or read on for
 the details. Homebrew users can install with `brew` instead: see
 [Install](#install).
@@ -286,10 +295,12 @@ stays open afterwards, so you can compare the answers side by side.
 
     csshm --login ubuntu --remote_command_keepalive "df -h /" --addresses servers.txt --screen 2-3
 
-**EC2 instances picked by tag.** Any command that prints hosts can feed
-csshm: hosts are read from standard input when none are named.
+**The running EC2 instances with one tag**, here the web servers, on two
+monitors. Any command that prints hosts can feed csshm: hosts are read from
+standard input when none are named.
 
-    aws ec2 describe-instances --filters "Name=tag:Role,Values=web" \
+    aws ec2 describe-instances \
+        --filters "Name=tag:Role,Values=web" "Name=instance-state-name,Values=running" \
         --query "Reservations[].Instances[].PrivateIpAddress" --output text \
         | tr '\t' '\n' | csshm --login ec2-user --screen 2-3
 
