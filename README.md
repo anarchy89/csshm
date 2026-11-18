@@ -463,6 +463,11 @@ window reaches all of them, then one typed in a single window stays there:
 
 ![Eighteen host windows tiled over a MacBook screen, an ultrawide monitor and a portrait monitor. A command typed in the red window appears in every one.](docs/monitors3.gif)
 
+Twenty-four servers across four monitors, with the fourth below the main
+one:
+
+![Twenty-four host windows tiled over four monitors: a MacBook screen, an ultrawide, a portrait monitor and one below the ultrawide. A command typed in the red window appears in every one.](docs/monitors4.gif)
+
 Sessions ending and Ctrl-A `r` closing the gaps. The remaining windows are
 shared out again across all three monitors:
 
