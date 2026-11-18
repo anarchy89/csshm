@@ -447,7 +447,7 @@ moves to the right one, then spreads over both with a grid on each.
 
 ![A running session moves from one monitor to the other, then spreads across both.](docs/screens.gif)
 
-That recording was made on one display split in two. The ones below are from
+That recording was made on one display split in two. The ones below are from separate 
 physical monitors.
 
 ### Several monitors
