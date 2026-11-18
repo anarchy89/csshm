@@ -24,6 +24,10 @@ final class TerminalBackend: WindowBackend {
     private let probe: String?
     /// Height of the primary display at the last reading.
     private var primaryHeight: Int?
+    /// The spare strips from the reading `screens()` last took.
+    private var lastSpare: [Int]?
+    /// How long a reading by another csshm may take before it is given up.
+    private static let probeLimit: TimeInterval = 3
 
     /// `probe` is for a process that stays running, like the master. Such a
     /// process goes on seeing the monitors as they were when it started: a
@@ -78,11 +82,14 @@ final class TerminalBackend: WindowBackend {
     }
 
     func screens() throws -> [Rect] {
-        try measureScreens().usable
+        let reading = try measureScreens()
+        lastSpare = reading.spare
+        return reading.usable
     }
 
     func spareBelowScreens() throws -> [Int] {
         if let count = pretendScreens, count > 1 { return Array(repeating: 0, count: count) }
+        if let spare = lastSpare { return spare }
         return try measureScreens().spare
     }
 
@@ -116,9 +123,22 @@ final class TerminalBackend: WindowBackend {
         process.standardError = FileHandle.nullDevice
         process.standardInput = FileHandle.nullDevice
         do { try process.run() } catch { return nil }
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        // Read on another thread so a probe that hangs cannot freeze the
+        // master: after the limit it is stopped and the reading is taken here.
+        final class Output: @unchecked Sendable { var data = Data() }
+        let output = Output()
+        let finished = DispatchSemaphore(value: 0)
+        DispatchQueue.global().async {
+            output.data = pipe.fileHandleForReading.readDataToEndOfFile()
+            finished.signal()
+        }
+        guard finished.wait(timeout: .now() + TerminalBackend.probeLimit) == .success else {
+            kill(process.processIdentifier, SIGKILL)
+            return nil
+        }
         process.waitUntilExit()
         guard process.terminationStatus == 0 else { return nil }
+        let data = output.data
         var height = 0
         var usable: [Rect] = []
         var spare: [Int] = []

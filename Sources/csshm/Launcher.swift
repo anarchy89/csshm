@@ -55,7 +55,9 @@ enum Launcher {
                               standing for the host: "docker exec -it {} sh".
                               {user} and {port} are also available.
       -x, --tile_x N          fixed number of columns on each monitor
-      -y, --tile_y N          fixed number of rows on each monitor
+      -y, --tile_y N          fixed number of rows on each monitor. 0 for
+                              either means automatic, whatever the settings
+                              file says.
           --profile NAME      Terminal profile for the host windows
           --master_profile NAME  Terminal profile for the master window
           --font_size N       font size for the host windows
@@ -75,6 +77,8 @@ enum Launcher {
       Ctrl-A   send a real Ctrl-A to the hosts
       r        re-tile and bring back hidden or minimised windows
       c        add a host
+      a        run again every host whose session has ended, such as
+               one ssh could not reach
       e        pick windows: arrows or h/j/k/l to move, then e enable,
                d disable, t toggle, o only this one, O only this one, zoomed
       n  t     enable all / toggle all
@@ -100,7 +104,8 @@ enum Launcher {
       all = ["web", "prod"]             # clusters can hold clusters
 
       Anything given on the command line wins over the file. The README
-      lists every setting, including colours.
+      lists every setting, including colours. This file takes the place
+      of csshX's ~/.csshrc, which is not read.
 
     EXAMPLES
       csshm web1 web2 web3
@@ -110,9 +115,11 @@ enum Launcher {
       cat servers.txt | csshm --login ubuntu
       csshm --command "docker exec -it {} sh" web db cache
 
-    A session that ends closes its window and the rest re-tile. If ssh itself
-    fails, the window stays open in grey so the error can be read: press Enter
-    in it to close it. csshm never stores or sends passwords.
+    A session that ends closes its window. The others stay where they are
+    until you re-tile, unless --retile auto is given. If ssh itself fails, the
+    window stays open in grey so the error can be read: press Enter in it to
+    close it or the menu key then a to try that host again. csshm never
+    stores or sends passwords.
 
     Full documentation: https://github.com/anarchy89/csshm
     """
@@ -190,12 +197,18 @@ enum Launcher {
             passed = PassedEnvironment.merge(
                 try PassedEnvironment.resolve(settings.env, from: environment, required: false),
                 try PassedEnvironment.resolve(options.env, from: environment, required: true))
-            if let text = options.command ?? settings.command {
-                // Given on the command line, ssh options alongside it are a mistake worth pointing out.
-                if options.command != nil, options.ssh != nil || !options.sshArgs.isEmpty || !options.remoteCommand.isEmpty {
-                    throw ConfigError("--command replaces ssh, so it cannot be combined with --ssh, --ssh_args or --remote_command")
-                }
+            let sshAsked = options.ssh != nil || !options.sshArgs.isEmpty || !options.remoteCommand.isEmpty
+            // Given on the command line, ssh options alongside it are a mistake worth pointing out.
+            if options.command != nil, sshAsked {
+                throw ConfigError("--command replaces ssh, so it cannot be combined with --ssh, --ssh_args or --remote_command")
+            }
+            // A command in the settings file is only a default: asking for
+            // ssh on the command line wins over it, as the command line
+            // does everywhere else.
+            if let text = options.command ?? (sshAsked ? nil : settings.command) {
                 template = try CommandTemplate(parsing: text)
+            } else if settings.command != nil {
+                warn("using ssh for this run, not the command from the settings file")
             }
             hosts = try entries.map { try HostSpec(parsing: $0.name, command: $0.command) }
             let login = options.login ?? settings.login
@@ -231,8 +244,8 @@ enum Launcher {
             sshArgs: sshArgs,
             remoteCommand: options.remoteCommand.isEmpty ? (settings.remoteCommand ?? "") : options.remoteCommand,
             screens: screens.screens,
-            tileX: options.tileX > 0 ? options.tileX : (settings.tileX ?? 0),
-            tileY: options.tileY > 0 ? options.tileY : (settings.tileY ?? 0),
+            tileX: options.tileX ?? settings.tileX ?? 0,
+            tileY: options.tileY ?? settings.tileY ?? 0,
             masterHeight: settings.masterHeight ?? 87,
             debug: options.debug,
             logFile: environment["CSSHM_LOG"],

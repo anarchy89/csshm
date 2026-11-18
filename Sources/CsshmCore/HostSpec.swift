@@ -182,7 +182,7 @@ public enum HostsFile {
     /// command to run on it. `#` starts a comment. Blank lines are skipped.
     public static func parse(_ text: String) -> [(name: String, command: String?)] {
         var result: [(name: String, command: String?)] = []
-        for rawLine in text.split(whereSeparator: { $0 == "\n" || $0 == "\r" }) {
+        for rawLine in text.split(whereSeparator: { $0 == "\n" || $0 == "\r" || $0 == "\r\n" }) {
             var line = rawLine
             if let hash = line.firstIndex(of: "#") {
                 line = line[..<hash]

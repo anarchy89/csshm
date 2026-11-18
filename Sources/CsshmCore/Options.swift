@@ -33,8 +33,10 @@ public struct Options: Equatable, Sendable {
     public var keepOpen = false
     /// A command template to run in each window in place of ssh.
     public var command: String?
-    public var tileX: Int = 0
-    public var tileY: Int = 0
+    /// `--tile_x` and `--tile_y`; `nil` when not given. 0 means automatic,
+    /// which also switches off a number from the settings file.
+    public var tileX: Int?
+    public var tileY: Int?
     public var hostsFiles: [String] = []
     /// `--env` values, each `NAME` or `NAME=VALUE`.
     public var env: [String] = []
@@ -212,8 +214,8 @@ public struct Options: Equatable, Sendable {
                 keepOpen = true
             case "command": command = value
             case "env": env.append(value ?? "")
-            case "tile_x": tileX = max(0, number ?? 0)
-            case "tile_y": tileY = max(0, number ?? 0)
+            case "tile_x": tileX = number.map { max(0, $0) }
+            case "tile_y": tileY = number.map { max(0, $0) }
             case "hosts": hostsFiles.append(value ?? "")
             case "debug": debug = number ?? (debug + 1)
             case "help", "man": help = true

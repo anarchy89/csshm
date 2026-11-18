@@ -28,6 +28,9 @@ Then:
 - Type in the red master window and every server receives it.
 - Click a server's window and type to reach only that one.
 - Press Ctrl-A in the red window for the menu. Ctrl-A then `x` closes everything.
+- If some servers could not be reached, perhaps because they were still
+  starting up, press Ctrl-A then `a` to try just those again. The others
+  stay connected.
 
 The most common variations:
 
@@ -71,6 +74,7 @@ had wide use. Please report problems.
 - [Security](#security)
 - [Coming from csshX](#coming-from-csshx)
 - [Troubleshooting](#troubleshooting)
+- [Known and possible bugs](#known-and-possible-bugs)
 - [How it works](#how-it-works)
 - [Development](#development)
 - [License](#license)
@@ -206,6 +210,7 @@ One host per line, in any of the forms above.
 - Text after a host, separated by a space, is a command to run on that host
   in place of a login shell. It overrides `--remote_command` for that host.
 - There is no header row and there are no other columns.
+- A file saved on Windows, with its line endings, works too.
 
 ## Options
 
@@ -223,7 +228,7 @@ One host per line, in any of the forms above.
 | `--master_screen N` | Monitor for the red master window. The default is 1 |
 | `--retile MODE` | `manual` (the default): a closed window leaves a gap until Ctrl-A `r`. `auto` (experimental): the windows re-tile by themselves when a session ends |
 | `-x`, `--tile_x N` | Fixed number of columns on each monitor |
-| `-y`, `--tile_y N` | Fixed number of rows on each monitor. Ignored if `--tile_x` is given |
+| `-y`, `--tile_y N` | Fixed number of rows on each monitor. Ignored if `--tile_x` is given. For either, 0 means automatic and switches off a number from the settings file |
 | `--profile NAME` | Terminal profile for the host windows, for example one with a small font or the bell switched off. `--slave_settings_set` and `--sss` mean the same |
 | `--master_profile NAME` | Terminal profile for the master window. `--master_settings_set` and `--mss` mean the same |
 | `--font_size N` | Font size for the host windows |
@@ -284,6 +289,9 @@ How the template works:
   container does not exist, the window stays open in grey with the error, as
   it does for a failed ssh connection. Press Enter in it to close it.
 - To make a template the default, put `command = "..."` in the settings file.
+  That default gives way to ssh for one run when you give `--ssh`,
+  `--ssh_args` or `--remote_command` on the command line. csshm says so
+  when it does.
 
 ## Environment variables
 
@@ -320,7 +328,12 @@ reaches AWS instances through Session Manager:
 ## Settings file and clusters
 
 csshm reads `~/.config/csshm/config.toml` if it exists. Every line is
-optional and anything given on the command line wins over the file.
+optional and anything given on the command line wins over the file. A file
+saved with Windows line endings is read the same way.
+
+If you used csshX, this file takes the place of `~/.csshrc`. csshm does not
+read `.csshrc`: the format is different, so copy your settings and clusters
+across by hand. See [Coming from csshX](#coming-from-csshx).
 
     # Defaults for every run
     login = "ubuntu"
@@ -515,6 +528,7 @@ Press Ctrl-A for the menu. Esc leaves it.
 | Ctrl-A | Send a real Ctrl-A to the hosts (so Ctrl-A Ctrl-A is "start of line" in a shell) |
 | `r` | Re-tile. Also brings back hidden or minimised windows and raises them all |
 | `c` | Add a host. Type it in any of the host forms and press Enter |
+| `a` | Run again every host whose session has ended, such as one ssh could not reach. Each reopens in its own place and the other hosts are not touched |
 | `e` | Selection mode. See the next section |
 | `n` | Enable all hosts |
 | `t` | Toggle all: enabled hosts become disabled and the reverse |
@@ -564,14 +578,18 @@ flips every host. Ctrl-A `n` enables everything again.
   press Ctrl-A `r`. With `--retile auto` they re-tile by themselves.
 - If ssh itself fails, for example the host cannot be reached or the
   connection drops, the window stays open with grey text so you can read the
-  error. Press Enter in that window to close it.
+  error. Press Enter in that window to close it or press Ctrl-A `a` to try
+  again: every host that has ended is run again in its own place in the
+  grid, while the others stay connected. That suits a server that was still
+  starting up when you first connected.
 - With `--remote_command_keepalive` every window stays open after its
   command finishes, so you can read the output side by side:
 
       csshm --remote_command_keepalive "df -h /" web1 web2 web3
 
   Finished windows turn grey and stop receiving your typing. Press Enter in
-  one to close it or use the menu's `x` to close them all.
+  one to close it, use the menu's `a` to run the command again in all of
+  them or its `x` to close them all.
 - When the last host window has gone, the master window stays open and says
   so. Add a host from the menu to carry on or press Ctrl-A `x` to close it.
 
@@ -666,7 +684,8 @@ What is not carried over:
 - Spaces, Growl notifications, split panes, clear scrollback and the bounds mode.
 - `.csshrc` and `/etc/clusters`. Settings and clusters now live in
   `~/.config/csshm/config.toml`, in a different format. `--config` names a
-  file in that new format.
+  file in that new format. See
+  [Settings file and clusters](#settings-file-and-clusters).
 - Host ranges such as `host[1-5]` and subnets. Your shell's own
   `10.0.0.{1..5}` still works.
 - These options are accepted so that old scripts run, but do nothing and
@@ -691,9 +710,20 @@ the primary display.
 not the layout on your desk. Try another number or press Ctrl-A `v` to move
 a running session.
 
+**Some servers refused the connection or were not ready yet.** Their
+windows stay open in grey with the error. Once the servers are up, press
+Ctrl-A `a` in the red window: every host that ended is run again in its own
+place in the grid. There is no need to close everything and start over.
+
 **A host window never appears or "the window did not start".** The window's
 shell has to start before csshm can run in it. A shell profile that waits
-for input or exits, will prevent that.
+for input or exits, will prevent that. csshm gives up on such a window after
+30 seconds and leaves it for you to close. The same goes for a window that
+was still starting when you pressed Ctrl-A `x`.
+
+**I closed the red window by mistake.** The host windows stay open and carry
+on as ordinary, separate sessions. Nothing is left behind, but they can no
+longer be typed into together: close them and run csshm again for that.
 
 **Windows overlap when there are very many.** Terminal has a minimum window
 size. With more windows than fit at that size, use more monitors or fewer hosts.
@@ -715,6 +745,28 @@ a variable for `--env` must be exported: `set -x AWS_PROFILE prod`.
 
 **Seeing what csshm runs.** `--debug` prints the ssh command in each window
 and leaves the windows open afterwards.
+
+## Known and possible bugs
+
+- **A Mac set to a language other than English (possible, untested).** csshm
+  looks for the Dock by its English name, so on a Mac set to another language
+  it may not find it. Windows could then overlap the Dock or leave a gap
+  after the Dock has moved to another monitor. Setting the Dock to hide
+  automatically avoids this.
+- **A leftover Dock strip.** A monitor the Dock has left can keep an unused
+  strip where the Dock was when its windows are in a single row.
+- **The Dock's thickness is an estimate** on a monitor the Dock has moved to
+  and can be a few points off.
+- **The strip beside a MacBook's camera notch stays unused**, even with the
+  menu bar hidden.
+- **Connecting or disconnecting a monitor while a session is open.** There
+  are too many variations of this to test. Windows on a monitor that has
+  gone are moved by macOS and the layout may not come out right. Close the
+  session with Ctrl-A `x` and run the command again.
+
+[Several monitors](#several-monitors) has more on the Dock strip, the Dock's
+thickness and the notch. If you
+find something else, please open an issue.
 
 ## How it works
 

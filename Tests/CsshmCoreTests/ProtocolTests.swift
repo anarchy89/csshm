@@ -119,7 +119,7 @@ final class ControlMachineTests: XCTestCase {
 
     func testSingleKeyActions() {
         let table: [(String, Action)] = [
-            ("n", .enableAll), ("t", .toggleAll), (" ", .enableNext), ("m", .minimise),
+            ("a", .rerunEnded), ("n", .enableAll), ("t", .toggleAll), (" ", .enableNext), ("m", .minimise),
             ("h", .hide), ("\u{08}", .tidy),
         ]
         for (key, action) in table {

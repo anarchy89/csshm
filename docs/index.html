@@ -107,6 +107,7 @@ brew install csshm</pre>
     <li>Type in the red master window and every server receives it.</li>
     <li>Click a server's window and type to reach only that one.</li>
     <li>Press Ctrl-A in the red window for the menu. Ctrl-A then <code>x</code> closes everything.</li>
+    <li>If some servers could not be reached, press Ctrl-A then <code>a</code> to try just those again. The others stay connected.</li>
   </ul>
   <pre>csshm --login ubuntu web1 web2 web3              # same user on every server
 csshm --ssh_args "-i ~/.ssh/key" web1 web2       # same key on every server

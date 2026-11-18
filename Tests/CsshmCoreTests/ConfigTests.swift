@@ -3,6 +3,16 @@ import XCTest
 @testable import CsshmCore
 
 final class TomlTests: XCTestCase {
+    func testWindowsLineEndings() throws {
+        let config = try UserConfig(parsing: "login = \"ubuntu\"\r\n# note\r\n[clusters]\r\nweb = [\"web1\",\r\n  \"web2\"]\r\n")
+        XCTAssertEqual(config.login, "ubuntu")
+        XCTAssertEqual(config.clusters["web"], .hosts(["web1", "web2"]))
+        // The line number in an error still counts every line.
+        XCTAssertThrowsError(try Toml.parse("a = 1\r\nb = \r\n")) { error in
+            XCTAssertEqual((error as? TomlError)?.line, 2)
+        }
+    }
+
     func testValuesAndSections() throws {
         let parsed = try Toml.parse("""
         # a comment

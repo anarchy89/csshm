@@ -58,6 +58,8 @@ public protocol WindowBackend {
     func screens() throws -> [Rect]
     /// For each screen, in the same order, the height of an empty strip
     /// below its usable area that windows may reach into but not start in.
+    /// It comes from the reading the last call of `screens()` took, so the
+    /// two always describe the same moment.
     func spareBelowScreens() throws -> [Int]
     /// Opens one new window per request, in order and returns each one's
     /// id (`nil` where it could not be found out).

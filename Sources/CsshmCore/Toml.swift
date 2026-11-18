@@ -20,7 +20,9 @@ public struct TomlError: Error, Equatable, CustomStringConvertible {
 /// are strings, whole numbers, true/false or lists (which may span lines).
 public enum Toml {
     public static func parse(_ text: String) throws -> [String: TomlValue] {
-        var parser = Parser(characters: Array(text))
+        // A file saved with Windows line endings: Swift reads each "\r\n"
+        // as one character, which is neither "\r" nor "\n".
+        var parser = Parser(characters: text.map { $0 == "\r\n" ? "\n" : $0 })
         return try parser.parseDocument()
     }
 

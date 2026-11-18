@@ -10,6 +10,10 @@ private var windowResized: sig_atomic_t = 0
 /// master window: kill -USR1 on the process running `csshm --master`.
 private var retileSignalled: sig_atomic_t = 0
 
+/// Set by SIGHUP, which Terminal sends when the master window is closed and
+/// by SIGTERM. The main loop then tidies up and exits.
+private var hangupSignalled: sig_atomic_t = 0
+
 /// One host and its window, as the master tracks it.
 final class HostWindow {
     let id: Int
@@ -77,6 +81,11 @@ final class Master {
     private var masterSpare = 0
     private var masterPlaced: Rect?
     private var lastScreens: [Rect] = []
+    /// Every monitor's usable area and spare strip at the last layout.
+    private var lastReading: (all: [Rect], spare: [Int]) = ([], [])
+    /// How many times a resized master has been looked at without the
+    /// monitors having changed.
+    private var masterChecks = 0
     private var lastLayout: GridLayout?
     private var adjustedForCount = -1
     private var selection: Int?
@@ -128,6 +137,8 @@ final class Master {
         signal(SIGPIPE, SIG_IGN)
         signal(SIGWINCH) { _ in windowResized = 1 }
         signal(SIGUSR1) { _ in retileSignalled = 1 }
+        signal(SIGHUP) { _ in hangupSignalled = 1 }
+        signal(SIGTERM) { _ in hangupSignalled = 1 }
 
         guard let fd = listenUnix(at: session + "/sock") else {
             die("cannot create the session socket in \(session)")
@@ -149,12 +160,17 @@ final class Master {
         status = ""
 
         while true {
+            // The master window was closed. The host windows carry on alone.
+            if hangupSignalled != 0 { shutdown(closeWindows: false) }
             if windowResized != 0 {
                 windowResized = 0
                 needsRedraw = true
                 // The master's own window changed size. If csshm did not do
                 // that, Terminal did: see checkMaster.
-                if masterWindow != nil { masterCheckAt = Date().addingTimeInterval(0.7) }
+                if masterWindow != nil {
+                    masterCheckAt = Date().addingTimeInterval(0.7)
+                    masterChecks = 0
+                }
             }
             if retileSignalled != 0 {
                 retileSignalled = 0
@@ -298,6 +314,8 @@ final class Master {
                 adjustFont(by: 1)
             case .addHost(let text):
                 addHost(text)
+            case .rerunEnded:
+                rerunEnded()
             case .selectMove(let dx, let dy):
                 moveSelection(dx: dx, dy: dy)
             case .enableSelected:
@@ -602,7 +620,9 @@ final class Master {
         guard !all.isEmpty else { return nil }
         masterHome = (1...all.count).contains(config.masterScreen) ? all[config.masterScreen - 1] : all[0]
         let numbers = screens.filter { (1...all.count).contains($0) }
+        // From the same reading as `all`, not a second one.
         let spare = (try? backend.spareBelowScreens()) ?? []
+        lastReading = (all, spare)
         masterSpare = (1...max(1, spare.count)).contains(config.masterScreen) && !spare.isEmpty ? spare[config.masterScreen - 1] : 0
         chosenSpare = (numbers.isEmpty ? [1] : numbers).map { $0 <= spare.count ? spare[$0 - 1] : 0 }
         let chosen = numbers.map { all[$0 - 1] }
@@ -694,6 +714,21 @@ final class Master {
         // Hidden with Ctrl-H or left as csshm placed it: nothing to do.
         guard abs(actual.height - placed.height) > 2 || abs(actual.y - placed.y) > 2 else { return }
         guard actual.x < placed.right, actual.right > placed.x else { return }
+        // Terminal does this when the space on the monitors changes. If it
+        // has not changed, the user resized the master, which is theirs to
+        // decide: it stays as it is until they ask for a re-tile. macOS can
+        // take a moment to report a change, so look once more before
+        // settling on that.
+        if let all = try? backend.screens(), let spare = try? backend.spareBelowScreens(),
+           all == lastReading.all, spare == lastReading.spare {
+            if masterChecks < 1 {
+                masterChecks += 1
+                masterCheckAt = Date().addingTimeInterval(1.5)
+            } else {
+                log("master is at \(actual), not \(placed), with the monitors unchanged: left as the user put it")
+            }
+            return
+        }
         log("master is at \(actual), not \(placed): laying out again")
         masterPlaced = nil
         measuredOn = nil
@@ -825,6 +860,36 @@ final class Master {
         nextID += 1
         hosts[host.id] = host
         open([host])
+    }
+
+    /// Runs every host whose session has ended again: the ones kept open in
+    /// grey after ssh failed or with `--remote_command_keepalive`. Each gets
+    /// a new window in the same cell, since it keeps its number and with it
+    /// its place in the order. The other hosts are not touched.
+    private func rerunEnded() {
+        let ended = ordered.filter { $0.dead }
+        guard !ended.isEmpty else {
+            status = "No host has ended, so there is nothing to run again."
+            writeAll(1, "\u{07}")
+            return
+        }
+        var fresh: [HostWindow] = []
+        for old in ended {
+            // The old process is only waiting for Enter and exits when told.
+            send(.quit, to: old)
+            if old.connected { close(old.fd) }
+            old.fd = -1
+            if let window = old.windowID { closeQueue.append(window) }
+            let host = HostWindow(id: old.id, spec: old.spec)
+            host.disabled = old.disabled
+            hosts[host.id] = host
+            fresh.append(host)
+        }
+        // Terminal only closes a window quietly once its process has gone.
+        usleep(300_000)
+        closeQueuedWindows()
+        open(fresh)
+        status = "Running \(fresh.count) host\(fresh.count == 1 ? "" : "s") again."
     }
 
     /// With exactly one host enabled, moves on to the next one. With none
@@ -980,13 +1045,13 @@ final class Master {
             var text = "Typing here goes to \(typing) of \(total) host\(total == 1 ? "" : "s"). \(menuKeyName) opens the menu."
             if waiting > 0 { text += "\nWaiting for \(waiting) window\(waiting == 1 ? "" : "s") to start." }
             if dead > 0 {
-                text += "\n\(dead) \(config.keepOpen ? "finished" : "ended with an error"): press Enter in such a window to close it or \(menuKeyName) x to close everything."
+                text += "\n\(dead) \(config.keepOpen ? "finished" : "ended with an error"): \(menuKeyName) a runs \(dead == 1 ? "it" : "them") again, Enter in such a window closes it."
             }
             return text
         case .action:
             return """
             Menu (Esc: back, \(menuKeyName): send \(menuKeyName) to the hosts)
-            [r]etile  [c] add host  [e]nable/disable  e[n]able all  [t]oggle all  [Space] next host
+            [r]etile  [c] add host  run ended hosts [a]gain  [e]nable/disable  e[n]able all  [t]oggle all  [Space] next host
             [g/G] columns  [f/F] font  s[o]rt  [m]inimise  [h]ide  [s]end text  mo[v]e to screen  [d]ump scrollback  e[x]it
             """
         case .enable:

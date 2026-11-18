@@ -128,6 +128,12 @@ final class HostSpecTests: XCTestCase {
             ["/usr/bin/ssh", "web1", "tail -f /var/log/syslog"])
     }
 
+    func testHostsFileWithWindowsLineEndings() {
+        let parsed = HostsFile.parse("web1\r\nweb2 uptime\r\n\r\n# note\r\nweb3\r\n")
+        XCTAssertEqual(parsed.map { $0.name }, ["web1", "web2", "web3"])
+        XCTAssertEqual(parsed.map { $0.command }, [nil, "uptime", nil])
+    }
+
     func testHostsFile() {
         let text = """
         # servers
@@ -203,6 +209,10 @@ final class OptionsTests: XCTestCase {
         XCTAssertEqual(options.login, "root")
         XCTAssertEqual(options.tileX, 4)
         XCTAssertEqual(options.tileY, 2)
+        // Not given is different from 0, which asks for automatic.
+        XCTAssertNil(try Options(arguments: ["web1"]).tileX)
+        XCTAssertEqual(try Options(arguments: ["--tile_x", "0", "-y=0"]).tileX, 0)
+        XCTAssertEqual(try Options(arguments: ["--tile_x", "0", "-y=0"]).tileY, 0)
         XCTAssertEqual(options.ssh, "mosh")
         XCTAssertEqual(options.hosts, ["host1"])
         XCTAssertEqual(options.debug, 1)
