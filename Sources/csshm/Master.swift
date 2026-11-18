@@ -5,6 +5,11 @@ import CsshmCore
 /// Set by the window-resize signal; the main loop redraws when it sees it.
 private var windowResized: sig_atomic_t = 0
 
+/// Set by SIGUSR1, which asks for a re-tile the same as the menu's `r`.
+/// It lets a script or a keyboard shortcut re-tile without typing in the
+/// master window: kill -USR1 on the process running `csshm --master`.
+private var retileSignalled: sig_atomic_t = 0
+
 /// One host and its window, as the master tracks it.
 final class HostWindow {
     let id: Int
@@ -62,6 +67,14 @@ final class Master {
     private var screens: [Int]
     private var grid: GridOptions
     private var measuredOn: Rect?
+    /// The monitor the master window sits on, from `--master_screen`.
+    private var masterHome: Rect?
+    /// Set while the hosts are being laid out again around the master.
+    private var fittingAroundMaster = false
+    /// For each chosen monitor, the strip below it the grid may reach into.
+    private var chosenSpare: [Int] = []
+    /// The same for the master's monitor.
+    private var masterSpare = 0
     private var masterPlaced: Rect?
     private var lastScreens: [Rect] = []
     private var lastLayout: GridLayout?
@@ -73,6 +86,11 @@ final class Master {
     private var lastInput = Date()
     private var resolveAt: Date?
     private var retileAt: Date?
+    /// Whether the pending re-tile should move windows or only close the
+    /// ones that have ended.
+    private var retileWanted = false
+    /// When to look at whether Terminal has resized the master window.
+    private var masterCheckAt: Date?
     private var retileFirstAsked: Date?
     private var closeQueue: [Int] = []
     private var quitDeadline: Date?
@@ -88,7 +106,7 @@ final class Master {
         self.config = config
         // --env values may be secrets and nothing reads this file again.
         if !config.environment.isEmpty { unlink(session + "/config.json") }
-        self.backend = TerminalBackend(pretendScreens: config.pretendScreens)
+        self.backend = TerminalBackend(pretendScreens: config.pretendScreens, probe: config.executable)
         self.debug = config.debug > 0
         self.machine = ControlMachine(actionKey: config.menuKey ?? 0x01)
         self.colors = config.colors
@@ -109,6 +127,7 @@ final class Master {
         signal(SIGTSTP, SIG_IGN)
         signal(SIGPIPE, SIG_IGN)
         signal(SIGWINCH) { _ in windowResized = 1 }
+        signal(SIGUSR1) { _ in retileSignalled = 1 }
 
         guard let fd = listenUnix(at: session + "/sock") else {
             die("cannot create the session socket in \(session)")
@@ -132,6 +151,17 @@ final class Master {
         while true {
             if windowResized != 0 {
                 windowResized = 0
+                needsRedraw = true
+                // The master's own window changed size. If csshm did not do
+                // that, Terminal did: see checkMaster.
+                if masterWindow != nil { masterCheckAt = Date().addingTimeInterval(0.7) }
+            }
+            if retileSignalled != 0 {
+                retileSignalled = 0
+                log("re-tile asked for by signal")
+                closeQueuedWindows()
+                retile(raise: true)
+                status = "Re-tiled"
                 needsRedraw = true
             }
             if needsRedraw { draw() }
@@ -167,7 +197,10 @@ final class Master {
             }
             runTimers()
 
-            if hosts.isEmpty { break }
+            // The master outlives its hosts: when the last one closes it
+            // stays, so a host can be added again from the menu. It only
+            // goes when the user quits.
+            if quitDeadline != nil, hosts.isEmpty { break }
             if let deadline = quitDeadline, deadline <= Date() { break }
         }
         shutdown(closeWindows: true)
@@ -178,6 +211,7 @@ final class Master {
         if machine.hasPending { deadlines.append(lastInput.addingTimeInterval(0.03)) }
         if let t = resolveAt { deadlines.append(t) }
         if let t = retileAt { deadlines.append(t) }
+        if let t = masterCheckAt { deadlines.append(t) }
         if let t = quitDeadline { deadlines.append(t) }
         if hosts.values.contains(where: { !$0.connected }) { deadlines.append(Date().addingTimeInterval(1)) }
         guard let soonest = deadlines.min() else { return -1 }
@@ -197,7 +231,12 @@ final class Master {
             retileAt = nil
             retileFirstAsked = nil
             closeQueuedWindows()
-            retile(raise: false)
+            if retileWanted { retile(raise: false) }
+            retileWanted = false
+        }
+        if let t = masterCheckAt, t <= now {
+            masterCheckAt = nil
+            checkMaster()
         }
         for host in hosts.values where !host.connected && now.timeIntervalSince(host.created) > 30 {
             status = "\(host.name): the window did not start"
@@ -404,7 +443,10 @@ final class Master {
         }
     }
 
-    /// A host's process has exited: forget it, close its window and re-tile.
+    /// A host's process has exited: forget it and close its window. With
+    /// `--retile auto` the remaining windows are then laid out again.
+    /// Otherwise the gap stays until the user asks, so that no window moves
+    /// while they are reading it or reaching for it.
     private func hostLeft(_ host: HostWindow) {
         guard hosts[host.id] === host else { return }
         log("\(host.name) left")
@@ -417,7 +459,12 @@ final class Master {
             selection = machine.mode == .enable ? ordered.first { $0.rect != nil }?.id : nil
             refreshColors()
         }
-        askRetile(after: 0.4)
+        askRetile(after: 0.4, layout: config.autoRetile)
+        if hosts.isEmpty {
+            status = "\(host.name) closed. No hosts are left: \(menuKeyName) x closes this window."
+        } else if !config.autoRetile {
+            status = "\(host.name) closed. \(menuKeyName) r re-tiles."
+        }
         needsRedraw = true
     }
 
@@ -528,7 +575,11 @@ final class Master {
 
     /// Asks for a re-tile once things have been quiet for `delay`, so that
     /// forty windows closing together cause one re-tile, not forty.
-    private func askRetile(after delay: TimeInterval) {
+    ///
+    /// Without `layout`, only the queued windows are closed when the time
+    /// comes and the others stay where they are.
+    private func askRetile(after delay: TimeInterval, layout: Bool = true) {
+        if layout { retileWanted = true }
         let now = Date()
         if retileFirstAsked == nil { retileFirstAsked = now }
         retileAt = min(retileFirstAsked!.addingTimeInterval(2), now.addingTimeInterval(delay))
@@ -549,7 +600,12 @@ final class Master {
             return nil
         }
         guard !all.isEmpty else { return nil }
-        let chosen = screens.compactMap { (1...all.count).contains($0) ? all[$0 - 1] : nil }
+        masterHome = (1...all.count).contains(config.masterScreen) ? all[config.masterScreen - 1] : all[0]
+        let numbers = screens.filter { (1...all.count).contains($0) }
+        let spare = (try? backend.spareBelowScreens()) ?? []
+        masterSpare = (1...max(1, spare.count)).contains(config.masterScreen) && !spare.isEmpty ? spare[config.masterScreen - 1] : 0
+        chosenSpare = (numbers.isEmpty ? [1] : numbers).map { $0 <= spare.count ? spare[$0 - 1] : 0 }
+        let chosen = numbers.map { all[$0 - 1] }
         return chosen.isEmpty ? [all[0]] : chosen
     }
 
@@ -560,12 +616,14 @@ final class Master {
 
         // Terminal enforces a minimum window height. Find out how tall the
         // master really is on this screen and give the hosts what is left.
-        if let window = masterWindow, measuredOn != chosen[0] {
-            let first = chosen[0]
+        let home = masterHome ?? chosen[0]
+        if let window = masterWindow, measuredOn != home {
+            let first = home
             let planned = Rect(x: first.x, y: first.bottom - config.masterHeight, width: first.width, height: config.masterHeight)
             apply([.show(window: window), .setBounds(window: window, planned)])
             if let actual = try? backend.bounds(of: window) {
                 grid.masterHeight = max(config.masterHeight, actual.height)
+                log("master measured: asked for \(planned), got \(actual), reserving \(grid.masterHeight)")
             }
             measuredOn = first
             masterPlaced = nil
@@ -575,7 +633,7 @@ final class Master {
         // that were there at the time; once that number changes, work the
         // columns out afresh.
         if count != adjustedForCount { grid.columnOffset = 0 }
-        let layout = GridLayout.compute(count: count, screens: chosen, options: grid)
+        let layout = GridLayout.compute(count: count, screens: chosen, options: grid, masterScreen: home, spare: chosenSpare, masterSpare: masterSpare)
         lastLayout = layout
         return layout
     }
@@ -620,6 +678,47 @@ final class Master {
         log("retile: \(placed.count) windows, \(moved) moved, columns \(layout.columns), screens \(lastScreens)")
         apply(ops)
         log("retile done")
+        fitAroundMaster(planned: layout.master)
+    }
+
+    /// Puts things right after Terminal has resized the master by itself.
+    ///
+    /// When the menu bar or the Dock changes (seen when the menu bar was
+    /// switched from hidden to shown), Terminal looks over its windows again
+    /// and stretches the master to its own minimum of five rows, which then
+    /// covers the bottom of the host windows. The space on the monitors has
+    /// usually changed as well, so everything is laid out afresh.
+    private func checkMaster() {
+        guard !debug, let window = masterWindow, let placed = masterPlaced,
+              let actual = try? backend.bounds(of: window) else { return }
+        // Hidden with Ctrl-H or left as csshm placed it: nothing to do.
+        guard abs(actual.height - placed.height) > 2 || abs(actual.y - placed.y) > 2 else { return }
+        guard actual.x < placed.right, actual.right > placed.x else { return }
+        log("master is at \(actual), not \(placed): laying out again")
+        masterPlaced = nil
+        measuredOn = nil
+        grid.masterHeight = config.masterHeight
+        retile(raise: false)
+    }
+
+    /// Terminal has the last word on where the master window ends up. It
+    /// moves the master up when its title bar would be inside a strip the
+    /// Dock has left behind and it may refuse a height it finds too small.
+    /// If the master reaches higher than planned, the host windows on its
+    /// monitor are laid out again in the space above where it really is.
+    private func fitAroundMaster(planned: Rect) {
+        guard !fittingAroundMaster, !debug, let window = masterWindow, let home = masterHome,
+              let actual = try? backend.bounds(of: window) else { return }
+        let needed = home.bottom - actual.y
+        let wanted = home.bottom - planned.y
+        // A master on another monitor or far from the bottom was moved by
+        // the user, which is theirs to decide.
+        guard actual.x < home.right, actual.right > home.x, needed > wanted + 2, needed < home.height / 2 else { return }
+        log("master reaches \(needed) up from the bottom, not \(wanted): fitting the hosts above it")
+        grid.masterHeight = needed
+        fittingAroundMaster = true
+        retile(raise: false)
+        fittingAroundMaster = false
     }
 
     private func refreshColors() {

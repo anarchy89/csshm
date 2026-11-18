@@ -33,6 +33,11 @@ enum Launcher {
                               for example "-i ~/.ssh/key -o ConnectTimeout=5"
           --screen SPEC       monitors to use: 2, 2-4 (2, 3 and 4) or 1,3.
                               1 is the primary display and the default.
+          --master_screen N   monitor for the red master window (default 1)
+          --retile MODE       manual (default): a closed window leaves a gap
+                              until you press the menu key then r. auto
+                              (experimental): the windows re-tile by
+                              themselves when a session ends.
           --hosts FILE        read hosts from FILE, one per line; "-" means
           --addresses FILE    standard input. "#" starts a comment. Text after
                               a host is a command to run on that host. Both
@@ -165,6 +170,13 @@ enum Launcher {
         let hosts: [HostSpec]
         let sshArgs: [String]
         let screens: ScreenSpec
+        let masterScreen = options.masterScreen ?? settings.masterScreen ?? 1
+        let retileMode: RetileMode
+        do {
+            retileMode = try RetileMode(parsing: options.retile ?? settings.retile ?? "manual")
+        } catch {
+            die("\(error)")
+        }
         // CSSHM_PRETEND_SCREENS and CSSHM_LOG are aids for testing.
         let environment = ProcessInfo.processInfo.environment
         let pretendScreens = environment["CSSHM_PRETEND_SCREENS"].flatMap { Int($0) }
@@ -190,7 +202,11 @@ enum Launcher {
             for host in hosts { try template?.check(host, login: login) }
             sshArgs = try ShellWords.split(options.sshArgs.isEmpty ? (settings.sshArgs ?? "") : options.sshArgs)
             screens = try ScreenSpec(parsing: options.screen.isEmpty ? (settings.screen ?? "") : options.screen)
-            try screens.validate(available: max(1, try backend.screens().count))
+            let available = max(1, try backend.screens().count)
+            try screens.validate(available: available)
+            if !(1...available).contains(masterScreen) {
+                throw ConfigError("--master_screen \(masterScreen): there \(available == 1 ? "is 1 monitor" : "are \(available) monitors")")
+            }
             menuKey = try options.menuKey.map { try MenuKey.parse($0) } ?? settings.menuKey
             if let size = options.fontSize, size < 4 { throw ConfigError("--font_size must be 4 or more") }
             let wanted = [profile, masterProfile].compactMap { $0 }
@@ -228,6 +244,8 @@ enum Launcher {
         config.colors = settings.colors
         config.commandTemplate = template
         config.keepOpen = options.keepOpen
+        config.masterScreen = masterScreen
+        config.autoRetile = retileMode == .auto
         config.environment = passed
         do {
             let data = try JSONEncoder().encode(config)

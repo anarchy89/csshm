@@ -34,6 +34,12 @@ public struct SessionConfig: Codable, Equatable, Sendable {
     public var commandTemplate: CommandTemplate?
     /// Keep each window open after its command ends, so the output can be read.
     public var keepOpen = false
+    /// Lay the windows out again by themselves when a session ends
+    /// (`--retile auto`). Otherwise a closed window leaves a gap until the
+    /// user asks for a re-tile.
+    public var autoRetile = false
+    /// 1-based number of the monitor the master window sits on.
+    public var masterScreen = 1
     /// `NAME=VALUE` entries to set for the command in each window (`--env`).
     public var environment: [String] = []
 

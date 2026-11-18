@@ -269,6 +269,19 @@ final class OptionsTests: XCTestCase {
         XCTAssertEqual(options.config, "~/my.toml")
         XCTAssertEqual(options.hosts, ["web"])
         XCTAssertTrue(options.warnings.isEmpty)
+        // Re-tiling after a window closes: on command unless asked otherwise.
+        XCTAssertNil(options.retile)
+        XCTAssertEqual(try Options(arguments: ["--retile", "auto", "web"]).retile, "auto")
+        XCTAssertEqual(try RetileMode(parsing: "manual"), .manual)
+        XCTAssertEqual(try RetileMode(parsing: "Auto"), .auto)
+        XCTAssertThrowsError(try RetileMode(parsing: "sometimes"))
+        XCTAssertEqual(try UserConfig(parsing: "retile = \"auto\"").retile, "auto")
+        XCTAssertThrowsError(try UserConfig(parsing: "retile = \"never\""))
+        // The master's monitor: not given unless asked for.
+        XCTAssertNil(options.masterScreen)
+        XCTAssertEqual(try Options(arguments: ["--master_screen", "3", "web"]).masterScreen, 3)
+        XCTAssertEqual(try UserConfig(parsing: "master_screen = 2").masterScreen, 2)
+        XCTAssertThrowsError(try UserConfig(parsing: "master_screen = 0"))
         // The csshX names for profiles still work.
         let old = try Options(arguments: ["--sss", "Quiet", "--mss", "Loud"])
         XCTAssertEqual([old.profile, old.masterProfile], ["Quiet", "Loud"])

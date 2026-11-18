@@ -85,6 +85,9 @@ public struct UserConfig: Equatable, Sendable {
     public var tileY: Int?
     public var menuKey: UInt8?
     public var masterHeight: Int?
+    public var masterScreen: Int?
+    /// `retile = "manual"` or `"auto"`.
+    public var retile: String?
     public var profile: String?
     public var masterProfile: String?
     public var fontSize: Int?
@@ -140,6 +143,10 @@ public struct UserConfig: Equatable, Sendable {
             case "tile_x": tileX = try integer(key, value, atLeast: 0)
             case "tile_y": tileY = try integer(key, value, atLeast: 0)
             case "master_height": masterHeight = try integer(key, value, atLeast: 20)
+            case "master_screen": masterScreen = try integer(key, value, atLeast: 1)
+            case "retile":
+                retile = try string(key, value)
+                _ = try RetileMode(parsing: retile!)
             case "font_size": fontSize = try integer(key, value, atLeast: 4)
             case "colors":
                 guard case .table(let table) = value else { throw ConfigError("colors must be a [colors] section") }
@@ -200,5 +207,20 @@ public struct UserConfig: Equatable, Sendable {
         }
         for entry in entries { try add(entry, within: []) }
         return result
+    }
+}
+
+/// When the windows are laid out again after a session ends.
+public enum RetileMode: String, Equatable, Sendable {
+    /// Only when the user asks. A closed window leaves a gap until then.
+    case manual
+    /// By themselves, shortly after a window closes.
+    case auto
+
+    public init(parsing text: String) throws {
+        guard let mode = RetileMode(rawValue: text.lowercased()) else {
+            throw ConfigError("retile: [\(text)] is not a mode. Use manual or auto")
+        }
+        self = mode
     }
 }

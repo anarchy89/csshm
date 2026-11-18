@@ -220,6 +220,8 @@ One host per line, in any of the forms above.
 | `--ssh COMMAND` | Program to run instead of `ssh`. It receives the same arguments ssh would |
 | `--env NAME`, `--env NAME=VALUE` | Pass an environment variable from the shell you are in to every host window or set one directly. May be repeated. See [Environment variables](#environment-variables) |
 | `--command TEMPLATE` | Run this in each window in place of ssh, with `{}` standing for the host. See [Containers, pods and other commands](#containers-pods-and-other-commands) |
+| `--master_screen N` | Monitor for the red master window. The default is 1 |
+| `--retile MODE` | `manual` (the default): a closed window leaves a gap until Ctrl-A `r`. `auto` (experimental): the windows re-tile by themselves when a session ends |
 | `-x`, `--tile_x N` | Fixed number of columns on each monitor |
 | `-y`, `--tile_y N` | Fixed number of rows on each monitor. Ignored if `--tile_x` is given |
 | `--profile NAME` | Terminal profile for the host windows, for example one with a small font or the bell switched off. `--slave_settings_set` and `--sss` mean the same |
@@ -324,6 +326,8 @@ optional and anything given on the command line wins over the file.
     login = "ubuntu"
     ssh_args = "-i ~/.ssh/key -o StrictHostKeyChecking=accept-new"
     screen = "2-3"
+    # master_screen = 2        # monitor for the red master window
+    # retile = "auto"          # re-tile by themselves when a session ends (experimental)
     remote_command = ""
     ssh = "ssh"
     # command = "docker exec -it {} sh"   # run this in place of ssh
@@ -390,7 +394,7 @@ expected:
 | `2` | Monitor 2 |
 | `2-4` | Monitors 2, 3 and 4 |
 | `1,3` | Monitors 1 and 3 |
-| `3-1` | Monitors 3, 2 and 1, with the master on 3 |
+| `3-1` | Monitors 3, 2 and 1, filled in that order |
 | not given | Monitor 1 |
 
 - Monitor 1 is the primary display, the one with the menu bar. The others
@@ -399,7 +403,13 @@ expected:
 - Each monitor gets its own grid. No window straddles two monitors.
 - Hosts are shared between monitors in proportion to their size, so equal
   monitors get equal numbers and a larger one gets more.
-- The master window sits along the bottom of the first monitor listed.
+- The red master window sits along the bottom of monitor 1, whichever
+  monitors the hosts are on. `--master_screen N` puts it on another monitor.
+  Host windows on the same monitor as the master are made shorter to leave
+  room for it.
+- Windows keep clear of the menu bar and the Dock, at any Dock size and on
+  whichever edge or monitor the Dock is. With the Dock set to hide, its space
+  is used.
 - A monitor number that does not exist is refused and nothing opens.
 
 The number of columns is worked out from the number of windows on each
@@ -416,12 +426,20 @@ fewer. A last row that is not full is simply left short.
 | 36 | 6 × 6 |
 | 40 | 8 × 5 |
 
-The grid is worked out again every time the number of windows changes. To
-override it, use `--tile_x` or `--tile_y` or the `g` and `G` menu keys while
-running. A `g`/`G` adjustment lasts until the number of windows changes.
+The grid is worked out again whenever the windows are laid out: at the
+start, when you add a host and when you press Ctrl-A `r`. To override it, use
+`--tile_x` or `--tile_y` or the `g` and `G` menu keys while running. A
+`g`/`G` adjustment lasts until the number of windows changes.
 
-If a monitor's resolution changes or a monitor is unplugged while csshm is
-running, press Ctrl-A `r` to re-tile.
+When a session ends its window closes and leaves a gap. The other windows
+stay where they are, so nothing moves while you are reading it or reaching
+for it. Press Ctrl-A `r` to close the gaps. To have the windows re-tile by
+themselves, use `--retile auto` or put `retile = "auto"` in the settings
+file. That mode is experimental: with more than one monitor a window can
+move to another screen when one closes and it has had little testing there.
+
+If a monitor's resolution changes or a monitor is plugged in or unplugged
+while csshm is running, press Ctrl-A `r` to re-tile.
 
 The session can be moved while it runs with Ctrl-A `v`. Here one display
 stands in for two monitors side by side: the session starts on the left one,
@@ -429,8 +447,56 @@ moves to the right one, then spreads over both with a grid on each.
 
 ![A running session moves from one monitor to the other, then spreads across both.](docs/screens.gif)
 
-Note: so far this has only been tested on a single monitor, split in two for
-this recording. I will record it on real multiple monitors when I have time.
+That recording was made on one display split in two. The ones below are from
+real monitors.
+
+### Several monitors
+
+csshm has been tested on three and four monitors at once: a 3440 by 1440
+ultrawide as the main display, a MacBook's own screen to its left, a monitor
+turned to portrait on its right and a fourth monitor below. That covers
+monitors of different sizes and scales, a portrait one and monitors placed
+above, below and beside the main display.
+
+Eighteen servers across three monitors. A command typed once in the red
+window reaches all of them, then one typed in a single window stays there:
+
+![Eighteen host windows tiled over a MacBook screen, an ultrawide monitor and a portrait monitor. A command typed in the red window appears in every one.](docs/monitors3.gif)
+
+Sessions ending and Ctrl-A `r` closing the gaps. The remaining windows are
+shared out again across all three monitors:
+
+![Six sessions end and leave gaps. A re-tile closes them. Then every window on the MacBook screen ends and a second re-tile moves windows over from the other monitors.](docs/retile3.gif)
+
+The Dock made larger, then largest, then smallest, then hidden, then the menu
+bar hidden as well, with a re-tile after each change. The red window stays
+just above the Dock and the grid uses whatever space is left:
+
+![The Dock grows, shrinks and hides under the red window on the ultrawide monitor. After each re-tile the windows fit the new space.](docs/dock3.gif)
+
+**csshm works best with the Dock and the menu bar set to hide
+automatically**, both of which are switches in System Settings. It works
+with both showing too, as above, but hiding them gives two things:
+
+- More room: about 30 points at the top of every monitor and the Dock's
+  strip on the monitor it is on.
+- A more predictable layout. What macOS reports about the Dock's space can be
+  out of date after the Dock has moved to another monitor or changed size.
+  csshm allows for that, but two effects remain. A monitor the Dock has left
+  can keep an unused strip where the Dock was when its windows are in a
+  single row. And csshm works out the Dock's thickness on the monitor it
+  moved to, which can be a few points off. A hidden Dock has neither.
+
+On a MacBook with a camera notch, the strip beside the notch stays unused
+even with the menu bar hidden. macOS does not let windows go there.
+
+If you change the Dock, the menu bar or the monitors while a session is
+open, press Ctrl-A `r` to fit the windows to the new space. csshm measures
+the monitors, the menu bar and the Dock afresh at every re-tile. A script or
+a keyboard shortcut can ask for the same re-tile without typing in the red
+window:
+
+    pkill -USR1 -f 'csshm.*--master'
 
 ## The master window and its menu
 
@@ -489,7 +555,8 @@ flips every host. Ctrl-A `n` enables everything again.
 ## When a session ends
 
 - If the session ends normally (you typed `exit` or the command finished),
-  its window closes and the remaining windows re-tile.
+  its window closes. The remaining windows stay where they are until you
+  press Ctrl-A `r`. With `--retile auto` they re-tile by themselves.
 - If ssh itself fails, for example the host cannot be reached or the
   connection drops, the window stays open with grey text so you can read the
   error. Press Enter in that window to close it.
@@ -500,9 +567,11 @@ flips every host. Ctrl-A `n` enables everything again.
 
   Finished windows turn grey and stop receiving your typing. Press Enter in
   one to close it or use the menu's `x` to close them all.
-- When the last host window has gone, the master window closes too.
+- When the last host window has gone, the master window stays open and says
+  so. Add a host from the menu to carry on or press Ctrl-A `x` to close it.
 
-Sessions ending one at a time, with the grid reshaping itself each time:
+Sessions ending one at a time with `--retile auto`, the grid reshaping itself
+each time:
 
 ![Nine sessions close one by one and the remaining windows re-tile from 3 by 3 down to 2 by 2.](docs/retile.gif)
 
@@ -574,9 +643,9 @@ and `--debug` keep their meaning and the Ctrl-A menu keeps its keys.
 
 What is different:
 
-- The grid is worked out again whenever the number of windows changes and
-  windows re-tile by themselves when a session ends. csshX kept the first
-  column count and left a hole.
+- The number of columns is worked out again at every re-tile. csshX kept
+  the first column count. As in csshX, a closed window leaves a hole until
+  you re-tile, unless you choose `--retile auto`.
 - `--screen 2-4` means monitors 2, 3 and 4 (csshX used 2 and 4 only), lists
   such as `1,3` work and each monitor gets its own grid.
 - The session can be moved to other monitors while it runs (Ctrl-A `v`).

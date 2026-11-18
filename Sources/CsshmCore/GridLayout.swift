@@ -66,6 +66,9 @@ public struct GridLayout: Equatable, Sendable {
         return min(max(wanted, 1), count)
     }
 
+    /// Height kept clear above a spare strip for the last row's title bar.
+    static let titleBarAllowance = 48
+
     /// Shares `count` windows between screens in proportion to usable area,
     /// so windows come out a similar size on every screen.
     public static func distribute(count: Int, areas: [Rect]) -> [Int] {
@@ -96,14 +99,33 @@ public struct GridLayout: Equatable, Sendable {
 
     /// Lays out `count` host windows over `screens` (visible frames, in the
     /// order the user asked for them), one independent grid per screen.
-    public static func compute(count: Int, screens: [Rect], options: GridOptions) -> GridLayout {
+    ///
+    /// The master window goes along the bottom of `masterScreen` or of the
+    /// first screen when none is given. If hosts share that screen, their
+    /// grid there is shortened to make room. If they do not, no host screen
+    /// gives anything up.
+    ///
+    /// `spare` gives, for each screen, the height of an empty strip below it
+    /// that windows may reach into but not start in (see `DockSpace`). A
+    /// grid of two or more rows is stretched over it. A single row is not,
+    /// because its windows would be taller than Terminal allows there and
+    /// neither is the screen holding the master, which sits at the bottom.
+    ///
+    /// `masterSpare` is such a strip below the master's screen. The master
+    /// keeps its place above the strip and is made taller to cover it, so
+    /// that no gap shows between it and the bottom of the screen.
+    public static func compute(count: Int, screens: [Rect], options: GridOptions, masterScreen: Rect? = nil,
+                               spare: [Int] = [], masterSpare: Int = 0) -> GridLayout {
         precondition(!screens.isEmpty, "at least one screen is required")
-        let first = screens[0]
-        let masterHeight = min(max(options.masterHeight, 0), first.height)
-        let master = Rect(x: first.x, y: first.bottom - masterHeight, width: first.width, height: masterHeight)
+        let home = masterScreen ?? screens[0]
+        let masterHeight = min(max(options.masterHeight, 0), home.height)
+        let master = Rect(x: home.x, y: home.bottom - masterHeight, width: home.width,
+                          height: masterHeight + max(0, masterSpare))
 
         var usable = screens
-        usable[0].height -= masterHeight
+        for index in usable.indices where usable[index] == home {
+            usable[index].height -= masterHeight
+        }
 
         let counts = distribute(count: count, areas: usable)
         var windows: [Rect] = []
@@ -119,7 +141,13 @@ public struct GridLayout: Equatable, Sendable {
             guard n > 0 else { continue }
             let rows = (n + cols - 1) / cols
             let cellWidth = area.width / cols
-            let cellHeight = area.height / rows
+            var cellHeight = area.height / rows
+            let extra = index < spare.count ? spare[index] : 0
+            if extra > 0, rows >= 2, screens[index] != home {
+                // The last row must still begin above the strip, with room for its title bar.
+                let stretched = (area.height + extra) / rows
+                if stretched >= extra + GridLayout.titleBarAllowance { cellHeight = stretched }
+            }
             for k in 0..<n {
                 windows.append(Rect(
                     x: area.x + (k % cols) * cellWidth,

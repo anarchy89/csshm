@@ -115,6 +115,144 @@ final class GridLayoutTests: XCTestCase {
         }
     }
 
+    /// The master sits on the monitor asked for. Hosts on that monitor make
+    /// room for it and hosts on other monitors keep their full height.
+    func testMasterOnAChosenScreen() {
+        let main = Rect(x: 0, y: 30, width: 3440, height: 1410)
+        let side = Rect(x: 3440, y: -554, width: 1440, height: 2530)
+        var options = GridOptions()
+        options.masterHeight = 87
+
+        // Hosts only on the side monitor, master on the main one.
+        let apart = GridLayout.compute(count: 8, screens: [side], options: options, masterScreen: main)
+        XCTAssertEqual(apart.master, Rect(x: 0, y: 1353, width: 3440, height: 87))
+        XCTAssertEqual(apart.windows.map { $0.bottom }.max(), side.bottom - (side.height % 4))
+        XCTAssertTrue(apart.windows.allSatisfy { $0.x >= side.x })
+
+        // Hosts on both, master on the second one listed.
+        let shared = GridLayout.compute(count: 8, screens: [main, side], options: options, masterScreen: side)
+        XCTAssertEqual(shared.master, Rect(x: 3440, y: side.bottom - 87, width: 1440, height: 87))
+        let onSide = shared.windows.filter { $0.x >= side.x }
+        let onMain = shared.windows.filter { $0.x < side.x }
+        XCTAssertFalse(onSide.isEmpty)
+        XCTAssertTrue(onSide.allSatisfy { $0.bottom <= side.bottom - 87 })
+        XCTAssertGreaterThan(onMain.map { $0.bottom }.max() ?? 0, main.bottom - 87)
+
+        // Not given: the first monitor listed, as before.
+        XCTAssertEqual(GridLayout.compute(count: 4, screens: [side, main], options: options).master.x, side.x)
+    }
+
+    /// The Dock's strip is also reserved on the monitor the Dock is really on.
+    func testDockSpaceFollowsTheDock() {
+        let main = Rect(x: 0, y: 0, width: 3440, height: 1440)
+        let below = Rect(x: 1520, y: 1440, width: 1920, height: 1080)
+        let mainFree = Rect(x: 0, y: 30, width: 3440, height: 1410)
+        let belowShort = Rect(x: 1520, y: 1470, width: 1920, height: 958)
+        let belowFree = Rect(x: 1520, y: 1470, width: 1920, height: 1050)
+        let leftShort = Rect(x: -1692, y: 215, width: 1692, height: 1084)
+
+        // Reported on the monitor below while the Dock is on the main one.
+        XCTAssertEqual(DockSpace.corrected(frames: [main, below], usable: [mainFree, belowShort], dock: main),
+                       [Rect(x: 0, y: 30, width: 3440, height: 1318), belowShort])
+        // Reported where the Dock is: nothing to do.
+        XCTAssertEqual(DockSpace.corrected(frames: [main, below], usable: [mainFree, belowShort], dock: below), [mainFree, belowShort])
+        // A hidden Dock takes no space. An unknown Dock changes nothing.
+        XCTAssertEqual(DockSpace.corrected(frames: [main, below], usable: [mainFree, belowFree], dock: main), [mainFree, belowFree])
+        XCTAssertEqual(DockSpace.corrected(frames: [main, below], usable: [mainFree, belowShort], dock: nil), [mainFree, belowShort])
+        // A Dock at the side moves in the same way.
+        let left = Rect(x: -1728, y: 182, width: 1728, height: 1117)
+        XCTAssertEqual(DockSpace.corrected(frames: [main, left], usable: [mainFree, leftShort], dock: main),
+                       [Rect(x: 36, y: 30, width: 3404, height: 1410), leftShort])
+        // The Dock was switched to the left edge and went to the monitor on
+        // the left, while the report still shows a strip under the other one.
+        let leftFree = Rect(x: -1728, y: 215, width: 1728, height: 1084)
+        XCTAssertEqual(DockSpace.corrected(frames: [main, below, left], usable: [mainFree, belowShort, leftFree], dock: left, edge: .left),
+                       [mainFree, belowShort, Rect(x: -1636, y: 215, width: 1636, height: 1084)])
+        // The same, with the Dock staying on the monitor it was reported for.
+        XCTAssertEqual(DockSpace.corrected(frames: [main, below], usable: [mainFree, belowShort], dock: below, edge: .right),
+                       [mainFree, Rect(x: 1520, y: 1470, width: 1828, height: 958)])
+    }
+
+    /// A strip the Dock left behind is used by a grid of two or more rows,
+    /// not by a single row and not on the master's screen.
+    func testSpareStripBelowAScreen() {
+        let below = Rect(x: 1520, y: 1470, width: 1920, height: 958)
+        let main = Rect(x: 0, y: 30, width: 3440, height: 1410)
+        var options = GridOptions()
+        options.masterHeight = 87
+        let two = GridLayout.compute(count: 4, screens: [below], options: options, masterScreen: main, spare: [92])
+        XCTAssertEqual(two.windows.map { $0.bottom }.max(), 1470 + 1050)
+        XCTAssertEqual(two.windows[0].height, 525)
+        let one = GridLayout.compute(count: 2, screens: [below], options: options, masterScreen: main, spare: [92])
+        XCTAssertEqual(one.windows.map { $0.bottom }.max(), below.bottom)
+        let withMaster = GridLayout.compute(count: 4, screens: [below], options: options, masterScreen: below, spare: [92])
+        XCTAssertEqual(withMaster.master.bottom, below.bottom)
+        XCTAssertTrue(withMaster.windows.allSatisfy { $0.bottom <= below.bottom - 87 })
+        // The strip is reported for the monitor the Dock left.
+        let frames = [Rect(x: 0, y: 0, width: 3440, height: 1440), Rect(x: 1520, y: 1440, width: 1920, height: 1080)]
+        XCTAssertEqual(DockSpace.analysed(frames: frames, usable: [main, below], dock: frames[0]).spare, [0, 92])
+        XCTAssertEqual(DockSpace.analysed(frames: frames, usable: [main, below], dock: frames[1]).spare, [0, 0])
+    }
+
+    /// The Dock is thinner on a monitor too narrow for its icons at full size.
+    func testDockThicknessOnAnotherMonitor() {
+        // Measured: macOS reported 92 on a 3440 wide monitor, 85 on a 1728
+        // wide one and 75 on a 1440 wide one, with 25 icons of size 64.
+        let fit = DockSpace.Fit(tileSize: 64, slots: 26)
+        XCTAssertEqual(fit.thickness(along: 3440), 92)
+        XCTAssertEqual(fit.thickness(along: 1728), 86)
+        XCTAssertEqual(fit.thickness(along: 1440), 74)
+        // Smaller icons: the Dock's top was 49 points up at size 30 and
+        // macOS reported 36 at size 16.
+        XCTAssertEqual(DockSpace.Fit(tileSize: 30, slots: 26).thickness(along: 1728), 53)
+        XCTAssertEqual(DockSpace.Fit(tileSize: 16, slots: 26).thickness(along: 1728), 36)
+
+        let wide = Rect(x: 0, y: 0, width: 1920, height: 1080)
+        let tall = Rect(x: 1920, y: 0, width: 1440, height: 2560)
+        let result = DockSpace.analysed(frames: [wide, tall],
+                                        usable: [Rect(x: 0, y: 30, width: 1920, height: 958), Rect(x: 1920, y: 30, width: 1440, height: 2530)],
+                                        dock: tall, fit: fit)
+        XCTAssertEqual(result.usable[1], Rect(x: 1920, y: 30, width: 1440, height: 2530 - 74))
+        XCTAssertEqual(result.spare, [92, 0])
+
+        // Reported on the right monitor but with the thickness of the Dock
+        // before it was made bigger: the larger figure is used. A report
+        // that is larger than the estimate is left as it is.
+        let grown = DockSpace.analysed(frames: [wide, tall],
+                                       usable: [Rect(x: 0, y: 30, width: 1920, height: 1014), Rect(x: 1920, y: 30, width: 1440, height: 2530)],
+                                       dock: wide, fit: fit)
+        XCTAssertEqual(grown.usable[0], Rect(x: 0, y: 30, width: 1920, height: 958))
+        let shrunk = DockSpace.analysed(frames: [wide, tall],
+                                        usable: [Rect(x: 0, y: 30, width: 1920, height: 958), Rect(x: 1920, y: 30, width: 1440, height: 2530)],
+                                        dock: wide, fit: DockSpace.Fit(tileSize: 16, slots: 26))
+        XCTAssertEqual(shrunk.usable[0], Rect(x: 0, y: 30, width: 1920, height: 958))
+        // The part of that strip the smaller Dock no longer covers is spare.
+        XCTAssertEqual(shrunk.spare, [92 - 36, 0])
+        // The master covers a spare strip below its screen by being taller.
+        var options = GridOptions()
+        options.masterHeight = 87
+        let covered = GridLayout.compute(count: 4, screens: [wide], options: options, masterScreen: wide, masterSpare: 56)
+        XCTAssertEqual(covered.master, Rect(x: 0, y: 1080 - 87, width: 1920, height: 87 + 56))
+        XCTAssertTrue(covered.windows.allSatisfy { $0.bottom <= 1080 - 87 })
+
+        // Set to hide: no space is taken where the Dock is. A strip
+        // still reported for it elsewhere is only spare.
+        let hidden = DockSpace.analysed(frames: [wide, tall],
+                                        usable: [Rect(x: 0, y: 30, width: 1920, height: 958), Rect(x: 1920, y: 30, width: 1440, height: 2530)],
+                                        dock: tall, fit: fit, hidden: true)
+        XCTAssertEqual(hidden.usable[1], Rect(x: 1920, y: 30, width: 1440, height: 2530))
+        XCTAssertEqual(hidden.spare, [92, 0])
+    }
+
+    /// Edges for Terminal's `frame`: measured upwards from the bottom-left of
+    /// the primary display, also for monitors above, below and left of it.
+    func testBottomLeftEdges() {
+        XCTAssertEqual(Rect(x: 100, y: 100, width: 800, height: 500).bottomLeftEdges(primaryHeight: 1440), [100, 840, 900, 1340])
+        XCTAssertEqual(Rect(x: -1700, y: 300, width: 800, height: 500).bottomLeftEdges(primaryHeight: 1440), [-1700, 640, -900, 1140])
+        XCTAssertEqual(Rect(x: 3500, y: -500, width: 800, height: 500).bottomLeftEdges(primaryHeight: 1440), [3500, 1440, 4300, 1940])
+        XCTAssertEqual(Rect(x: 1600, y: 1500, width: 800, height: 500).bottomLeftEdges(primaryHeight: 1440), [1600, -560, 2400, -60])
+    }
+
     /// On a portrait screen, ties go to fewer columns so windows stay wide.
     func testAutomaticColumnsOnAPortraitScreen() {
         XCTAssertEqual(GridLayout.automaticColumns(for: 3, landscape: false), 1)

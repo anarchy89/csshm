@@ -45,6 +45,10 @@ public struct Options: Equatable, Sendable {
     public var profile: String?
     public var masterProfile: String?
     public var fontSize: Int?
+    /// `--retile`: "manual" or "auto". `nil` when not given.
+    public var retile: String?
+    /// Monitor for the master window (`--master_screen`); 1 when not given.
+    public var masterScreen: Int?
     public var menuKey: String?
     public var listClusters: Bool = false
     public var update: Bool = false
@@ -56,6 +60,8 @@ public struct Options: Equatable, Sendable {
     public var slave: Bool = false
     public var session: String?
     public var slaveID: Int?
+    /// Internal: print the monitors' usable areas and exit.
+    public var probeScreens: Bool = false
 
     /// Hosts given as plain arguments.
     public var hosts: [String] = []
@@ -91,6 +97,8 @@ public struct Options: Equatable, Sendable {
         Spec(names: ["config", "c"], kind: .string),
         Spec(names: ["profile", "slave_settings_set", "sss"], kind: .string),
         Spec(names: ["master_profile", "master_settings_set", "mss"], kind: .string),
+        Spec(names: ["master_screen"], kind: .int),
+        Spec(names: ["retile"], kind: .string),
         Spec(names: ["font_size"], kind: .int),
         Spec(names: ["menu_key"], kind: .string),
         Spec(names: ["list_clusters"], kind: .flag),
@@ -99,6 +107,7 @@ public struct Options: Equatable, Sendable {
         Spec(names: ["slave"], kind: .flag),
         Spec(names: ["session"], kind: .string),
         Spec(names: ["slaveid"], kind: .int),
+        Spec(names: ["probe_screens"], kind: .flag),
         // csshX options with no equivalent here: accepted so old scripts run.
         Spec(names: ["space"], kind: .int, ignored: true),
         Spec(names: ["ping_test", "ping"], kind: .flag, ignored: true),
@@ -191,6 +200,8 @@ public struct Options: Equatable, Sendable {
             case "config": config = value
             case "profile": profile = value
             case "master_profile": masterProfile = value
+            case "master_screen": masterScreen = number
+            case "retile": retile = value
             case "font_size": fontSize = number
             case "menu_key": menuKey = value
             case "list_clusters": listClusters = true
@@ -211,6 +222,7 @@ public struct Options: Equatable, Sendable {
             case "slave": slave = true
             case "session": session = value
             case "slaveid": slaveID = number
+            case "probe_screens": probeScreens = true
             default: break
             }
         }

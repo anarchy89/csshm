@@ -23,6 +23,11 @@ if options.update {
     Updater.run()
 }
 
+if options.probeScreens {
+    TerminalBackend.printProbe()
+    exit(0)
+}
+
 if options.master {
     guard let session = options.session else { die("--master needs --session") }
     Master(session: session).run()
