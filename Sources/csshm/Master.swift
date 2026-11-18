@@ -316,6 +316,10 @@ final class Master {
                 addHost(text)
             case .rerunEnded:
                 rerunEnded()
+            case .clearScrollback:
+                let windows = hosts.values.filter { $0.connected }
+                for host in windows { send(.clearScrollback, to: host) }
+                status = "Cleared the scrollback of \(windows.count) window\(windows.count == 1 ? "" : "s")."
             case .selectMove(let dx, let dy):
                 moveSelection(dx: dx, dy: dy)
             case .enableSelected:
@@ -610,7 +614,7 @@ final class Master {
     }
 
     private func chosenScreens() -> [Rect]? {
-        let all: [Rect]
+        var all: [Rect]
         do {
             all = try backend.screens()
         } catch {
@@ -618,11 +622,22 @@ final class Master {
             return nil
         }
         guard !all.isEmpty else { return nil }
-        masterHome = (1...all.count).contains(config.masterScreen) ? all[config.masterScreen - 1] : all[0]
         let numbers = screens.filter { (1...all.count).contains($0) }
         // From the same reading as `all`, not a second one.
-        let spare = (try? backend.spareBelowScreens()) ?? []
+        var spare = (try? backend.spareBelowScreens()) ?? []
         lastReading = (all, spare)
+        // --bounds: keep to the given part of a monitor. The master follows,
+        // since its monitor is taken from the same list.
+        if !config.bounds.isEmpty, let frames = try? backend.frames(), frames.count == all.count {
+            for bounds in config.bounds where (1...all.count).contains(bounds.screen) {
+                let index = bounds.screen - 1
+                guard let limited = bounds.limited(to: all[index], frame: frames[index]) else { continue }
+                // A strip the Dock left behind only matters to an area that reaches it.
+                if limited.bottom != all[index].bottom, index < spare.count { spare[index] = 0 }
+                all[index] = limited
+            }
+        }
+        masterHome = (1...all.count).contains(config.masterScreen) ? all[config.masterScreen - 1] : all[0]
         masterSpare = (1...max(1, spare.count)).contains(config.masterScreen) && !spare.isEmpty ? spare[config.masterScreen - 1] : 0
         chosenSpare = (numbers.isEmpty ? [1] : numbers).map { $0 <= spare.count ? spare[$0 - 1] : 0 }
         let chosen = numbers.map { all[$0 - 1] }
@@ -1052,7 +1067,7 @@ final class Master {
             return """
             Menu (Esc: back, \(menuKeyName): send \(menuKeyName) to the hosts)
             [r]etile  [c] add host  run ended hosts [a]gain  [e]nable/disable  e[n]able all  [t]oggle all  [Space] next host
-            [g/G] columns  [f/F] font  s[o]rt  [m]inimise  [h]ide  [s]end text  mo[v]e to screen  [d]ump scrollback  e[x]it
+            [g/G] columns  [f/F] font  s[o]rt  [m]inimise  [h]ide  [s]end text  mo[v]e to screen  [d]ump scrollback  [k] clear scrollback  e[x]it
             """
         case .enable:
             let name = selected.map { "  Selected: \($0.name)\($0.disabled ? " (disabled)" : "")" } ?? ""

@@ -40,6 +40,8 @@ public struct SessionConfig: Codable, Equatable, Sendable {
     public var autoRetile = false
     /// 1-based number of the monitor the master window sits on.
     public var masterScreen = 1
+    /// Areas the windows are kept to, at most one per monitor (`--bounds`).
+    public var bounds: [ScreenBounds] = []
     /// `NAME=VALUE` entries to set for the command in each window (`--env`).
     public var environment: [String] = []
 

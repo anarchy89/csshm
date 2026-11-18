@@ -31,6 +31,8 @@ public struct ControlMachine: Sendable {
         case addHost(String)
         /// Run every host whose session has ended again.
         case rerunEnded
+        /// Wipe the scrollback history of every host window.
+        case clearScrollback
         case selectMove(dx: Int, dy: Int)
         case enableSelected
         case disableSelected
@@ -237,6 +239,7 @@ public struct ControlMachine: Sendable {
         switch byte {
         case UInt8(ascii: "r"): once(.retile, &actions)
         case UInt8(ascii: "a"): once(.rerunEnded, &actions)
+        case UInt8(ascii: "k"): once(.clearScrollback, &actions)
         case UInt8(ascii: "n"): once(.enableAll, &actions)
         case UInt8(ascii: "t"): once(.toggleAll, &actions)
         case UInt8(ascii: " "): once(.enableNext, &actions)

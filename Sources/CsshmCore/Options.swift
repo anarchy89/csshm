@@ -51,6 +51,8 @@ public struct Options: Equatable, Sendable {
     public var retile: String?
     /// Monitor for the master window (`--master_screen`); 1 when not given.
     public var masterScreen: Int?
+    /// `--bounds` values, each `SCREEN:X1,Y1-X2,Y2`.
+    public var bounds: [String] = []
     public var menuKey: String?
     public var listClusters: Bool = false
     public var update: Bool = false
@@ -100,6 +102,7 @@ public struct Options: Equatable, Sendable {
         Spec(names: ["profile", "slave_settings_set", "sss"], kind: .string),
         Spec(names: ["master_profile", "master_settings_set", "mss"], kind: .string),
         Spec(names: ["master_screen"], kind: .int),
+        Spec(names: ["bounds"], kind: .string),
         Spec(names: ["retile"], kind: .string),
         Spec(names: ["font_size"], kind: .int),
         Spec(names: ["menu_key"], kind: .string),
@@ -203,6 +206,7 @@ public struct Options: Equatable, Sendable {
             case "profile": profile = value
             case "master_profile": masterProfile = value
             case "master_screen": masterScreen = number
+            case "bounds": bounds.append(value ?? "")
             case "retile": retile = value
             case "font_size": fontSize = number
             case "menu_key": menuKey = value

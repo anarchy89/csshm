@@ -61,6 +61,9 @@ public protocol WindowBackend {
     /// It comes from the reading the last call of `screens()` took, so the
     /// two always describe the same moment.
     func spareBelowScreens() throws -> [Int]
+    /// Every screen's full rectangle, menu bar and Dock included, in the
+    /// same order and from the same reading as `screens()`.
+    func frames() throws -> [Rect]
     /// Opens one new window per request, in order and returns each one's
     /// id (`nil` where it could not be found out).
     func openWindows(_ requests: [WindowRequest]) throws -> [Int?]

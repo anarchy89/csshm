@@ -18,6 +18,7 @@ final class WireProtocolTests: XCTestCase {
         .exited(status: 255),
         .exited(status: -1),
         .quit,
+        .clearScrollback,
     ]
 
     func testRoundTrip() throws {
@@ -119,7 +120,7 @@ final class ControlMachineTests: XCTestCase {
 
     func testSingleKeyActions() {
         let table: [(String, Action)] = [
-            ("a", .rerunEnded), ("n", .enableAll), ("t", .toggleAll), (" ", .enableNext), ("m", .minimise),
+            ("a", .rerunEnded), ("k", .clearScrollback), ("n", .enableAll), ("t", .toggleAll), (" ", .enableNext), ("m", .minimise),
             ("h", .hide), ("\u{08}", .tidy),
         ]
         for (key, action) in table {

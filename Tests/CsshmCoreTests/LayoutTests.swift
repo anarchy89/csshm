@@ -3,6 +3,35 @@ import XCTest
 @testable import CsshmCore
 
 final class ScreenSpecTests: XCTestCase {
+    func testScreenBounds() throws {
+        let area = try ScreenBounds(parsing: " 2:100,30-1720,1400 ")
+        XCTAssertEqual(area.screen, 2)
+        XCTAssertEqual(area.description, "2:100,30-1720,1400")
+        // Corners are measured from the monitor's own top-left corner.
+        let frame = Rect(x: 1710, y: -200, width: 3440, height: 1440)
+        let usable = Rect(x: 1710, y: -170, width: 3440, height: 1410)
+        XCTAssertEqual(area.rect(in: frame), Rect(x: 1810, y: -170, width: 1620, height: 1370))
+        XCTAssertNoThrow(try area.check(frame: frame, usable: usable))
+        // Under the menu bar or past the edge is refused, saying what is free.
+        XCTAssertThrowsError(try ScreenBounds(parsing: "2:0,0-1720,1400").check(frame: frame, usable: usable)) { error in
+            XCTAssertTrue("\(error)".contains("monitor 2 is free from 0,30 to 3440,1440"), "\(error)")
+        }
+        XCTAssertThrowsError(try ScreenBounds(parsing: "2:0,30-3441,1400").check(frame: frame, usable: usable))
+        for bad in ["", "2", "2:0,0", "0:0,0-500,500", "2:0,0-100,500", "2:500,500-0,0", "2:a,0-500,500", "2:0,0-500,500-9", "2:-5,0-500,500"] {
+            XCTAssertThrowsError(try ScreenBounds(parsing: bad), bad)
+        }
+    }
+
+    func testScreenBoundsAreTrimmedWhenTheSpaceShrinks() throws {
+        let frame = Rect(x: 0, y: 0, width: 1710, height: 1107)
+        let area = try ScreenBounds(parsing: "1:0,0-860,1107")
+        // The menu bar and the Dock came back: the area gives way to them.
+        XCTAssertEqual(area.limited(to: Rect(x: 0, y: 30, width: 1710, height: 1000), frame: frame),
+                       Rect(x: 0, y: 30, width: 860, height: 1000))
+        // Too little left to use.
+        XCTAssertNil(try ScreenBounds(parsing: "1:0,900-860,1107").limited(to: Rect(x: 0, y: 30, width: 1710, height: 1000), frame: frame))
+    }
+
     func testSingleRangeAndList() throws {
         XCTAssertEqual(try ScreenSpec(parsing: "3").screens, [3])
         XCTAssertEqual(try ScreenSpec(parsing: "3-4").screens, [3, 4])

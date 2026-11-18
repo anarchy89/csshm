@@ -92,6 +92,10 @@ enum Slave {
                         writeAll(2, "\r\ncsshm: cannot type into this terminal: \(String(cString: strerror(errno)))\r\n")
                     }
                 }
+            case .clearScrollback:
+                // Terminal drops its history on this code and leaves what
+                // is on screen alone.
+                writeAll(1, "\u{1b}[3J")
             case .quit:
                 lock.lock()
                 quitRequested = true

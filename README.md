@@ -226,6 +226,7 @@ One host per line, in any of the forms above.
 | `--env NAME`, `--env NAME=VALUE` | Pass an environment variable from the shell you are in to every host window or set one directly. May be repeated. See [Environment variables](#environment-variables) |
 | `--command TEMPLATE` | Run this in each window in place of ssh, with `{}` standing for the host. See [Containers, pods and other commands](#containers-pods-and-other-commands) |
 | `--master_screen N` | Monitor for the red master window. The default is 1 |
+| `--bounds AREA` | Keep the windows to part of a monitor. `AREA` is `SCREEN:X1,Y1-X2,Y2`, for example `2:0,30-1720,1400`. May be repeated, once per monitor. See [Using part of a monitor](#using-part-of-a-monitor) |
 | `--retile MODE` | `manual` (the default): a closed window leaves a gap until Ctrl-A `r`. `auto` (experimental): the windows re-tile by themselves when a session ends |
 | `-x`, `--tile_x N` | Fixed number of columns on each monitor |
 | `-y`, `--tile_y N` | Fixed number of rows on each monitor. Ignored if `--tile_x` is given. For either, 0 means automatic and switches off a number from the settings file |
@@ -340,6 +341,7 @@ across by hand. See [Coming from csshX](#coming-from-csshx).
     ssh_args = "-i ~/.ssh/key -o StrictHostKeyChecking=accept-new"
     screen = "2-3"
     # master_screen = 2        # monitor for the red master window
+    # bounds = ["1:0,30-860,900"]   # keep the windows to part of a monitor
     # retile = "auto"          # re-tile by themselves when a session ends (experimental)
     remote_command = ""
     ssh = "ssh"
@@ -424,6 +426,31 @@ expected:
   whichever edge or monitor the Dock is. With the Dock set to hide, its space
   is used.
 - A monitor number that does not exist is refused and nothing opens.
+
+### Using part of a monitor
+
+`--bounds` keeps csshm to one area of a monitor, which leaves the rest free
+for something else, such as a browser beside the session:
+
+    csshm --bounds 1:0,30-860,900 web1 web2 web3 web4
+
+The value is the monitor number, a colon, then the top-left and bottom-right
+corners of the area: `SCREEN:X1,Y1-X2,Y2`.
+
+- The numbers are points measured from the top-left corner of that monitor,
+  not of the whole desktop. On a Retina display a point is two pixels, so
+  these are the sizes macOS shows in System Settings, not the panel's pixel
+  count.
+- The area has to fit in what is free on the monitor, clear of the menu bar
+  and the Dock. If it does not, nothing opens and csshm says what is free:
+  `monitor 1 is free from 0,30 to 1710,972`.
+- Give it once per monitor to limit several: `--bounds 1:... --bounds 2:...`.
+  A monitor without one is used in full.
+- The red master window goes along the bottom of the area when it is on
+  that monitor.
+- If the menu bar or the Dock later comes to overlap the area, the next
+  re-tile trims the area to fit.
+- In the settings file: `bounds = ["1:0,30-860,900", "2:0,30-1720,1400"]`.
 
 The number of columns is worked out from the number of windows on each
 monitor: the count near the square root that leaves the fewest empty cells.
@@ -541,6 +568,7 @@ Press Ctrl-A for the menu. Esc leaves it.
 | Ctrl-H | Hide the host windows and minimise the master, to put the whole session away |
 | `s` | Type a piece of text into every enabled host: `h` its hostname, `c` its host as you wrote it, `i` its window id, `s` its number in the session |
 | `v` | Move the session to other monitors. Type a `--screen` value and press Enter |
+| `k` | Clear the scrollback of every host window. What is on screen stays |
 | `d` | Save every window's scrollback. Type a base name (under your home folder) or press Enter for `Desktop/csshm_scrollback`. Each host gets `<name>.<host>.txt` |
 | `x` | End every session, close every window and exit |
 
@@ -681,7 +709,9 @@ What is different:
 
 What is not carried over:
 
-- Spaces, Growl notifications, split panes, clear scrollback and the bounds mode.
+- Spaces, Growl notifications and split panes.
+- The interactive bounds mode. `--bounds` does the same job with numbers:
+  see [Using part of a monitor](#using-part-of-a-monitor).
 - `.csshrc` and `/etc/clusters`. Settings and clusters now live in
   `~/.config/csshm/config.toml`, in a different format. `--config` names a
   file in that new format. See

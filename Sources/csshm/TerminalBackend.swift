@@ -26,6 +26,8 @@ final class TerminalBackend: WindowBackend {
     private var primaryHeight: Int?
     /// The spare strips from the reading `screens()` last took.
     private var lastSpare: [Int]?
+    /// The monitors' full rectangles from that same reading.
+    private var lastFrames: [Rect]?
     /// How long a reading by another csshm may take before it is given up.
     private static let probeLimit: TimeInterval = 3
 
@@ -84,7 +86,13 @@ final class TerminalBackend: WindowBackend {
     func screens() throws -> [Rect] {
         let reading = try measureScreens()
         lastSpare = reading.spare
+        lastFrames = reading.frames
         return reading.usable
+    }
+
+    func frames() throws -> [Rect] {
+        if let frames = lastFrames { return frames }
+        return try measureScreens().frames
     }
 
     func spareBelowScreens() throws -> [Int] {
@@ -93,24 +101,28 @@ final class TerminalBackend: WindowBackend {
         return try measureScreens().spare
     }
 
-    private func measureScreens() throws -> (usable: [Rect], spare: [Int]) {
+    private func measureScreens() throws -> (usable: [Rect], spare: [Int], frames: [Rect]) {
         let reading = probe.flatMap { runProbe($0) } ?? measureHere()
         if reading.primaryHeight > 0 { primaryHeight = reading.primaryHeight }
         if let count = pretendScreens, count > 1, let first = reading.usable.first {
-            return (first.splitIntoColumns(count), [])
+            // A pretend screen has no menu bar or Dock of its own.
+            let columns = first.splitIntoColumns(count)
+            return (columns, [], columns)
         }
-        return (reading.usable, reading.spare)
+        return (reading.usable, reading.spare, reading.frames)
     }
 
-    private typealias Reading = (primaryHeight: Int, usable: [Rect], spare: [Int])
+    private typealias Reading = (primaryHeight: Int, usable: [Rect], spare: [Int], frames: [Rect])
 
     /// Prints a reading for `runProbe` in another csshm to pick up: the
-    /// primary display's height, then one line per monitor.
+    /// primary display's height, then one line per monitor with its usable
+    /// area, its spare strip and its full rectangle.
     static func printProbe() {
         let reading = TerminalBackend().measureHere()
         print("primary \(reading.primaryHeight)")
-        for (rect, spare) in zip(reading.usable, reading.spare) {
-            print("\(rect.x) \(rect.y) \(rect.width) \(rect.height) \(spare)")
+        for (index, rect) in reading.usable.enumerated() where index < reading.spare.count && index < reading.frames.count {
+            let frame = reading.frames[index]
+            print("\(rect.x) \(rect.y) \(rect.width) \(rect.height) \(reading.spare[index]) \(frame.x) \(frame.y) \(frame.width) \(frame.height)")
         }
     }
 
@@ -142,16 +154,18 @@ final class TerminalBackend: WindowBackend {
         var height = 0
         var usable: [Rect] = []
         var spare: [Int] = []
+        var frames: [Rect] = []
         for line in String(decoding: data, as: UTF8.self).split(separator: "\n") {
             let words = line.split(separator: " ")
             if words.count == 2, words[0] == "primary", let h = Int(words[1]) {
                 height = h
-            } else if words.count == 5, let v = Optional(words.compactMap { Int($0) }), v.count == 5 {
+            } else if words.count == 9, let v = Optional(words.compactMap { Int($0) }), v.count == 9 {
                 usable.append(Rect(x: v[0], y: v[1], width: v[2], height: v[3]))
                 spare.append(v[4])
+                frames.append(Rect(x: v[5], y: v[6], width: v[7], height: v[8]))
             }
         }
-        return usable.isEmpty ? nil : (height, usable, spare)
+        return usable.isEmpty ? nil : (height, usable, spare, frames)
     }
 
     private func measureHere() -> Reading {
@@ -163,15 +177,16 @@ final class TerminalBackend: WindowBackend {
         // It shows nothing: no Dock icon and no menu.
         _ = NSApplication.shared
         let all = NSScreen.screens
-        guard let primary = all.first else { return (0, [], []) }
+        guard let primary = all.first else { return (0, [], [], []) }
         func rect(_ frame: NSRect) -> Rect {
             Rect(bottomLeftX: frame.minX, bottomLeftY: frame.minY, width: frame.width, height: frame.height,
                  primaryHeight: primary.frame.height)
         }
-        let measured = DockSpace.analysed(frames: all.map { rect($0.frame) },
+        let frames = all.map { rect($0.frame) }
+        let measured = DockSpace.analysed(frames: frames,
                                           usable: all.map { rect($0.visibleFrame) },
                                           dock: dockWindow(), fit: dockFit(), hidden: dockHides(), edge: dockEdge())
-        return (Int(primary.frame.height.rounded()), measured.usable, measured.spare)
+        return (Int(primary.frame.height.rounded()), measured.usable, measured.spare, frames)
     }
 
     /// The rectangle of the Dock's window, which covers the monitor the Dock

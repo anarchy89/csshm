@@ -25,6 +25,8 @@ public enum Message: Equatable, Sendable {
     case exited(status: Int32)
     /// Master to host process: end the command and exit.
     case quit
+    /// Master to host process: wipe the window's scrollback history.
+    case clearScrollback
 
     static let maxPayload = 1 << 20
 
@@ -35,6 +37,7 @@ public enum Message: Equatable, Sendable {
         case .input: return 3
         case .exited: return 4
         case .quit: return 5
+        case .clearScrollback: return 6
         }
     }
 
@@ -56,7 +59,7 @@ public enum Message: Equatable, Sendable {
             payload = bytes
         case .exited(let status):
             Message.put(UInt32(bitPattern: status), into: &payload)
-        case .quit:
+        case .quit, .clearScrollback:
             break
         }
         var frame: [UInt8] = [tag]
@@ -91,6 +94,8 @@ public enum Message: Equatable, Sendable {
             return .exited(status: Int32(bitPattern: try reader.uint32()))
         case 5:
             return .quit
+        case 6:
+            return .clearScrollback
         default:
             throw WireError.unknownTag(tag)
         }

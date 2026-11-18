@@ -86,6 +86,8 @@ public struct UserConfig: Equatable, Sendable {
     public var menuKey: UInt8?
     public var masterHeight: Int?
     public var masterScreen: Int?
+    /// Areas to keep the windows to, each `SCREEN:X1,Y1-X2,Y2`.
+    public var bounds: [String] = []
     /// `retile = "manual"` or `"auto"`.
     public var retile: String?
     public var profile: String?
@@ -144,6 +146,13 @@ public struct UserConfig: Equatable, Sendable {
             case "tile_y": tileY = try integer(key, value, atLeast: 0)
             case "master_height": masterHeight = try integer(key, value, atLeast: 20)
             case "master_screen": masterScreen = try integer(key, value, atLeast: 1)
+            case "bounds":
+                if case .array(let items) = value {
+                    bounds = try items.map { try string(key, $0) }
+                } else {
+                    bounds = [try string(key, value)]
+                }
+                for item in bounds { _ = try ScreenBounds(parsing: item) }
             case "retile":
                 retile = try string(key, value)
                 _ = try RetileMode(parsing: retile!)

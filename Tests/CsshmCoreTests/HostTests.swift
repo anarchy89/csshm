@@ -289,6 +289,11 @@ final class OptionsTests: XCTestCase {
         XCTAssertThrowsError(try UserConfig(parsing: "retile = \"never\""))
         // The master's monitor: not given unless asked for.
         XCTAssertNil(options.masterScreen)
+        XCTAssertEqual(try Options(arguments: ["--bounds", "1:0,30-860,900", "--bounds=2:0,0-500,500", "web"]).bounds,
+                       ["1:0,30-860,900", "2:0,0-500,500"])
+        XCTAssertEqual(try UserConfig(parsing: "bounds = [\"1:0,30-860,900\"]").bounds, ["1:0,30-860,900"])
+        XCTAssertEqual(try UserConfig(parsing: "bounds = \"2:0,0-500,500\"").bounds, ["2:0,0-500,500"])
+        XCTAssertThrowsError(try UserConfig(parsing: "bounds = [\"left half\"]"))
         XCTAssertEqual(try Options(arguments: ["--master_screen", "3", "web"]).masterScreen, 3)
         XCTAssertEqual(try UserConfig(parsing: "master_screen = 2").masterScreen, 2)
         XCTAssertThrowsError(try UserConfig(parsing: "master_screen = 0"))

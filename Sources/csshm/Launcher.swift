@@ -34,6 +34,10 @@ enum Launcher {
           --screen SPEC       monitors to use: 2, 2-4 (2, 3 and 4) or 1,3.
                               1 is the primary display and the default.
           --master_screen N   monitor for the red master window (default 1)
+          --bounds AREA       keep the windows to part of a monitor. AREA is
+                              SCREEN:X1,Y1-X2,Y2 in points from that monitor's
+                              top-left corner: 2:0,30-1720,1400. May be
+                              repeated, once per monitor.
           --retile MODE       manual (default): a closed window leaves a gap
                               until you press the menu key then r. auto
                               (experimental): the windows re-tile by
@@ -91,6 +95,7 @@ enum Launcher {
       s        type each host's own name or id into it
       v        move the session to other monitors
       d        save every window's scrollback to files
+      k        clear the scrollback of every host window
       x        close everything and exit
 
     SETTINGS FILE (~/.config/csshm/config.toml, optional)
@@ -178,6 +183,7 @@ enum Launcher {
         let sshArgs: [String]
         let screens: ScreenSpec
         let masterScreen = options.masterScreen ?? settings.masterScreen ?? 1
+        var bounds: [ScreenBounds] = []
         let retileMode: RetileMode
         do {
             retileMode = try RetileMode(parsing: options.retile ?? settings.retile ?? "manual")
@@ -215,8 +221,20 @@ enum Launcher {
             for host in hosts { try template?.check(host, login: login) }
             sshArgs = try ShellWords.split(options.sshArgs.isEmpty ? (settings.sshArgs ?? "") : options.sshArgs)
             screens = try ScreenSpec(parsing: options.screen.isEmpty ? (settings.screen ?? "") : options.screen)
-            let available = max(1, try backend.screens().count)
+            let usable = try backend.screens()
+            let available = max(1, usable.count)
             try screens.validate(available: available)
+            bounds = try (options.bounds.isEmpty ? settings.bounds : options.bounds).map { try ScreenBounds(parsing: $0) }
+            let frames = try backend.frames()
+            for (index, area) in bounds.enumerated() {
+                guard area.screen <= usable.count, area.screen <= frames.count else {
+                    throw ScreenSpecError.noSuchScreen(area.screen, available: available)
+                }
+                if bounds[..<index].contains(where: { $0.screen == area.screen }) {
+                    throw ConfigError("--bounds is given twice for monitor \(area.screen)")
+                }
+                try area.check(frame: frames[area.screen - 1], usable: usable[area.screen - 1])
+            }
             if !(1...available).contains(masterScreen) {
                 throw ConfigError("--master_screen \(masterScreen): there \(available == 1 ? "is 1 monitor" : "are \(available) monitors")")
             }
@@ -258,6 +276,7 @@ enum Launcher {
         config.commandTemplate = template
         config.keepOpen = options.keepOpen
         config.masterScreen = masterScreen
+        config.bounds = bounds
         config.autoRetile = retileMode == .auto
         config.environment = passed
         do {
