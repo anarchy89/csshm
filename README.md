@@ -2,6 +2,8 @@
 
 Cluster SSH for macOS: type once and it goes to many SSH sessions at the same time.
 
+csshm is not limited to ssh (see below [Containers, pods and other commands](#containers-pods-and-other-commands))
+
 csshm opens one Terminal window per host, tiles them across your monitors
 and adds a red master window. Whatever you type in the master goes to every
 host. Click a host window and type and it goes only to that host.
