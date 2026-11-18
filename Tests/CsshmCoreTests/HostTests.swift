@@ -325,6 +325,7 @@ final class OptionsTests: XCTestCase {
         XCTAssertEqual(try UserConfig(parsing: "bounds = [\"1:0,30-860,900\"]").bounds, ["1:0,30-860,900"])
         XCTAssertEqual(try UserConfig(parsing: "bounds = \"2:0,0-500,500\"").bounds, ["2:0,0-500,500"])
         XCTAssertThrowsError(try UserConfig(parsing: "bounds = [\"left half\"]"))
+        XCTAssertTrue(try Options(arguments: ["--list_screens"]).listScreens)
         XCTAssertEqual(try Options(arguments: ["--master_screen", "3", "web"]).masterScreen, 3)
         XCTAssertEqual(try UserConfig(parsing: "master_screen = 2").masterScreen, 2)
         XCTAssertThrowsError(try UserConfig(parsing: "master_screen = 0"))

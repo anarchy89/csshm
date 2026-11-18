@@ -90,6 +90,12 @@ final class TerminalBackend: WindowBackend {
         return reading.usable
     }
 
+    /// What macOS calls each monitor, in the same order as `screens()`.
+    func screenNames() -> [String] {
+        _ = NSApplication.shared
+        return NSScreen.screens.map { $0.localizedName }
+    }
+
     func frames() throws -> [Rect] {
         if let frames = lastFrames { return frames }
         return try measureScreens().frames

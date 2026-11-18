@@ -250,6 +250,7 @@ One host per line, in any of the forms above.
 | `--menu_key KEY` | Key that opens the menu, written like `ctrl-b`. The default is Ctrl-A |
 | `--config FILE` | Settings file to read instead of `~/.config/csshm/config.toml` |
 | `--list_clusters` | Print the names of the clusters in the settings file and exit |
+| `--list_screens` | Print each monitor's number, name, size and place and the area free for `--bounds`, then exit |
 | `--debug` | Show the command each window runs and leave windows open when their session ends |
 | `--update` | Replace this csshm with the latest release, if that is newer |
 | `-h`, `--help` | Show the built-in help |
@@ -507,7 +508,7 @@ expected:
 
 - Monitor 1 is the primary display, the one with the menu bar. The others
   follow the order macOS reports them, which is not always left to right on
-  your desk. If a number is not the monitor you expected, try the next one.
+  your desk. `csshm --list_screens` shows which number each monitor has.
 - Each monitor gets its own grid. No window straddles two monitors.
 - Hosts are shared between monitors in proportion to their size, so equal
   monitors get equal numbers and a larger one gets more.
@@ -529,6 +530,18 @@ for something else, such as a browser beside the session:
 
 The value is the monitor number, a colon, then the top-left and bottom-right
 corners of the area: `SCREEN:X1,Y1-X2,Y2`.
+
+`csshm --list_screens` shows what each monitor allows. It opens nothing:
+
+    MONITOR  NAME                     SIZE       PLACE       FREE AREA, AS A --bounds VALUE
+    1        DELL S3422DWG            3440x1440  main        1:0,30-3440,1440
+    2        Built-in Retina Display  1728x1117  left of 1   2:0,33-1728,1117
+    3        DELL S2721DGF            1440x2560  right of 1  3:0,30-1440,2560
+    4        -                        1920x1080  below 1     4:0,30-1920,990
+
+The last column is the whole free area of that monitor, written the way
+`--bounds` takes it. Use it as it is or shrink it: the left half of monitor 1
+above is `1:0,30-1720,1440`. A monitor macOS has no name for shows `-`.
 
 - The numbers are points measured from the top-left corner of that monitor,
   not of the whole desktop. On a Retina display a point is two pixels, so
@@ -830,8 +843,8 @@ your login session. Run csshm without `sudo`.
 the primary display.
 
 **The windows land on the wrong monitor.** The numbers follow macOS's order,
-not the layout on your desk. Try another number or press Ctrl-A `v` to move
-a running session.
+not the layout on your desk. `csshm --list_screens` shows which number each
+monitor has. Press Ctrl-A `v` to move a running session.
 
 **Some servers refused the connection or were not ready yet.** Their
 windows stay open in grey with the error. Once the servers are up, press
@@ -903,8 +916,8 @@ The quirks I know of:
   menu bar hidden.
 - **Monitor numbers can change.** They follow the order macOS reports the
   monitors in, which can differ after a restart or after plugging the
-  monitors in again. If windows land on the wrong monitor, try another
-  number with `--screen` or move the session with Ctrl-A `v`.
+  monitors in again. `csshm --list_screens` shows which number each monitor
+  has now. To move a session that landed on the wrong one, press Ctrl-A `v`.
 - **Connecting or disconnecting a monitor while a session is open.** There
   are too many variations of this to test. Windows on a monitor that has
   gone are moved by macOS and the layout may not come out right. Close the
@@ -924,7 +937,6 @@ Not tested yet, so possible trouble:
   it. Windows could then overlap the Dock or leave a gap after the Dock has
   moved to another monitor. Setting the Dock to hide automatically avoids
   this.
-- **`--bounds` on more than one monitor.** It was tested on a single screen.
 - **Several desktops (Spaces).** A session should stay on the desktop it was
   started on, but re-tiling while another desktop is showing is untried.
 - **Intel Macs and macOS versions before 27.** The download includes an

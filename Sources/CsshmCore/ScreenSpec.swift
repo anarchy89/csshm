@@ -84,6 +84,45 @@ public struct ScreenBounds: Equatable, Codable, Sendable, CustomStringConvertibl
     }
 }
 
+/// The table `--list_screens` prints: each monitor's number, name, size,
+/// place among the others and the area free for windows, written as a
+/// value `--bounds` accepts.
+public enum ScreenList {
+    /// Where a monitor is, going by its rectangle and the main monitor's.
+    public static func place(of frame: Rect, main: Rect) -> String {
+        if frame == main { return "main" }
+        if frame.right <= main.x { return "left of 1" }
+        if frame.x >= main.right { return "right of 1" }
+        if frame.bottom <= main.y { return "above 1" }
+        if frame.y >= main.bottom { return "below 1" }
+        let dx = frame.centerX - main.centerX, dy = frame.centerY - main.centerY
+        if abs(dx) >= abs(dy) { return dx < 0 ? "left of 1" : "right of 1" }
+        return dy < 0 ? "above 1" : "below 1"
+    }
+
+    /// - Parameters:
+    ///   - frames: every monitor's full rectangle, the main one first.
+    ///   - usable: the part of each that is clear of the menu bar and Dock.
+    ///   - names: what macOS calls each monitor; may be shorter than `frames`.
+    public static func table(frames: [Rect], usable: [Rect], names: [String]) -> String {
+        var rows = [["MONITOR", "NAME", "SIZE", "PLACE", "FREE AREA, AS A --bounds VALUE"]]
+        for (index, frame) in frames.enumerated() where index < usable.count {
+            let free = usable[index]
+            let name = index < names.count && !names[index].isEmpty ? names[index] : "-"
+            rows.append([
+                String(index + 1), name, "\(frame.width)x\(frame.height)", place(of: frame, main: frames[0]),
+                "\(index + 1):\(free.x - frame.x),\(free.y - frame.y)-\(free.right - frame.x),\(free.bottom - frame.y)",
+            ])
+        }
+        let widths = (0..<5).map { column in rows.map { $0[column].count }.max() ?? 0 }
+        return rows.map { row in
+            row.enumerated().map { column, cell in
+                column == 4 ? cell : cell + String(repeating: " ", count: widths[column] - cell.count)
+            }.joined(separator: "  ")
+        }.joined(separator: "\n")
+    }
+}
+
 /// Which monitors a session uses. Screens are numbered from 1 in the order
 /// macOS reports them, with 1 being the primary display.
 public struct ScreenSpec: Equatable, Sendable, CustomStringConvertible {

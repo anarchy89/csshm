@@ -3,6 +3,27 @@ import XCTest
 @testable import CsshmCore
 
 final class ScreenSpecTests: XCTestCase {
+    func testScreenList() {
+        // The owner's four monitors: main, one to the left, one to the right, one below.
+        let frames = [Rect(x: 0, y: 0, width: 3440, height: 1440), Rect(x: -1728, y: 182, width: 1728, height: 1117),
+                      Rect(x: 3440, y: -584, width: 1440, height: 2560), Rect(x: 1520, y: 1440, width: 1920, height: 1080)]
+        let usable = [Rect(x: 0, y: 30, width: 3440, height: 1410), Rect(x: -1728, y: 215, width: 1728, height: 1084),
+                      Rect(x: 3440, y: -554, width: 1440, height: 2530), Rect(x: 1520, y: 1470, width: 1920, height: 960)]
+        XCTAssertEqual(frames.map { ScreenList.place(of: $0, main: frames[0]) }, ["main", "left of 1", "right of 1", "below 1"])
+        XCTAssertEqual(ScreenList.place(of: Rect(x: 0, y: -1080, width: 1920, height: 1080), main: frames[0]), "above 1")
+        let lines = ScreenList.table(frames: frames, usable: usable, names: ["DELL S3422DWG", "Built-in Retina Display"]).split(separator: "\n").map(String.init)
+        XCTAssertEqual(lines.count, 5)
+        XCTAssertEqual(lines[0], "MONITOR  NAME                     SIZE       PLACE       FREE AREA, AS A --bounds VALUE")
+        XCTAssertEqual(lines[2], "2        Built-in Retina Display  1728x1117  left of 1   2:0,33-1728,1117")
+        XCTAssertEqual(lines[4], "4        -                        1920x1080  below 1     4:0,30-1920,990")
+        // Every value in the table is one --bounds accepts for that monitor.
+        for (index, line) in lines.dropFirst().enumerated() {
+            let area = try? ScreenBounds(parsing: String(line.split(separator: " ").last!))
+            XCTAssertNotNil(area, line)
+            XCTAssertNoThrow(try area?.check(frame: frames[index], usable: usable[index]), line)
+        }
+    }
+
     func testScreenBounds() throws {
         let area = try ScreenBounds(parsing: " 2:100,30-1720,1400 ")
         XCTAssertEqual(area.screen, 2)

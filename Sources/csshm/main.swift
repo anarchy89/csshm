@@ -28,6 +28,10 @@ if options.probeScreens {
     exit(0)
 }
 
+if options.listScreens {
+    Launcher.listScreens()
+}
+
 if options.master {
     guard let session = options.session else { die("--master needs --session") }
     Master(session: session).run()

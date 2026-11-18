@@ -55,6 +55,8 @@ public struct Options: Equatable, Sendable {
     public var bounds: [String] = []
     public var menuKey: String?
     public var listClusters: Bool = false
+    /// `--list_screens`: print the monitors and exit.
+    public var listScreens: Bool = false
     public var update: Bool = false
     public var help: Bool = false
     public var version: Bool = false
@@ -107,6 +109,7 @@ public struct Options: Equatable, Sendable {
         Spec(names: ["font_size"], kind: .int),
         Spec(names: ["menu_key"], kind: .string),
         Spec(names: ["list_clusters"], kind: .flag),
+        Spec(names: ["list_screens"], kind: .flag),
         Spec(names: ["update"], kind: .flag),
         Spec(names: ["master"], kind: .flag),
         Spec(names: ["slave"], kind: .flag),
@@ -211,6 +214,7 @@ public struct Options: Equatable, Sendable {
             case "font_size": fontSize = number
             case "menu_key": menuKey = value
             case "list_clusters": listClusters = true
+            case "list_screens": listScreens = true
             case "update": update = true
             case "remote_command": remoteCommand = value ?? ""
             case "remote_command_keepalive":

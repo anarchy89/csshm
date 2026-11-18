@@ -37,7 +37,8 @@ enum Launcher {
           --bounds AREA       keep the windows to part of a monitor. AREA is
                               SCREEN:X1,Y1-X2,Y2 in points from that monitor's
                               top-left corner: 2:0,30-1720,1400. May be
-                              repeated, once per monitor.
+                              repeated, once per monitor. --list_screens
+                              shows what each monitor allows.
           --retile MODE       manual (default): a closed window leaves a gap
                               until you press the menu key then r. auto
                               (experimental): the windows re-tile by
@@ -68,6 +69,8 @@ enum Launcher {
           --menu_key KEY      key that opens the menu, for example ctrl-b
           --config FILE       settings file to read instead of the default
           --list_clusters     print the cluster names and exit
+          --list_screens      print each monitor's number, name, size and the
+                              area free for --bounds, then exit
           --debug             show the command each window runs and leave
                               windows open when their session ends
           --update            replace this csshm with the latest release
@@ -289,6 +292,25 @@ enum Launcher {
             try? backend.activate()
         } catch {
             try? FileManager.default.removeItem(atPath: session)
+            die("\(error)")
+        }
+        exit(0)
+    }
+
+    /// `--list_screens`: the monitors as csshm numbers them, with the area
+    /// of each that windows may use.
+    static func listScreens() -> Never {
+        let pretend = ProcessInfo.processInfo.environment["CSSHM_PRETEND_SCREENS"].flatMap { Int($0) }
+        let backend = TerminalBackend(pretendScreens: pretend)
+        do {
+            let usable = try backend.screens()
+            let frames = try backend.frames()
+            print(ScreenList.table(frames: frames, usable: usable, names: pretend == nil ? backend.screenNames() : []))
+            print("")
+            print("Sizes are in points. The free area is the monitor without the menu bar and")
+            print("the Dock as they are now, measured from that monitor's top-left corner.")
+            print("Give --bounds that value or any smaller area inside it.")
+        } catch {
             die("\(error)")
         }
         exit(0)
