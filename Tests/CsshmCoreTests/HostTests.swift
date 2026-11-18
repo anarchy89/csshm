@@ -128,6 +128,37 @@ final class HostSpecTests: XCTestCase {
             ["/usr/bin/ssh", "web1", "tail -f /var/log/syslog"])
     }
 
+    /// The combined examples in the README's "Putting options together".
+    func testReadmeExamplesParse() throws {
+        // For the ones fed by a pipe, only csshm's own part is here.
+        let examples = [
+            "--login ubuntu --ssh_args \"-i ~/.ssh/key\" --addresses servers.txt --screen 2-3",
+            "--addresses servers.txt --screen 2-3 --master_screen 1",
+            "--login ubuntu --addresses servers.txt --screen 1-4 --font_size 9",
+            "--login ubuntu --remote_command \"tail -f /var/log/nginx/error.log\" --addresses web.txt --screen 2-3",
+            "--login ubuntu --remote_command_keepalive \"df -h /\" --addresses servers.txt --screen 2-3",
+            "--login ec2-user --screen 2-3",
+            "--login ubuntu --ssh_args \"-J bastion.example.com\" --addresses private.txt",
+            "--env AWS_PROFILE=prod --command \"aws ssm start-session --target {}\" --screen 2 i-0518b235de43acdcd i-0ba5ca0c58dbfeebb",
+            "--command \"kubectl exec -it {} -- sh\" --screen 2",
+            "web db --screen 2-3",
+            "--addresses servers.txt --bounds 1:0,30-860,900 --tile_x 2",
+            "--menu_key ctrl-b --addresses servers.txt --screen 2",
+        ]
+        for example in examples {
+            let options = try Options(arguments: try ShellWords.split(example))
+            XCTAssertTrue(options.warnings.isEmpty, example)
+            _ = try ScreenSpec(parsing: options.screen)
+            for host in options.hosts { _ = try HostSpec(parsing: host) }
+            _ = try ShellWords.split(options.sshArgs)
+            for area in options.bounds { _ = try ScreenBounds(parsing: area) }
+            if let command = options.command { _ = try CommandTemplate(parsing: command) }
+            if let key = options.menuKey { _ = try MenuKey.parse(key) }
+            if let mode = options.retile { _ = try RetileMode(parsing: mode) }
+            _ = try PassedEnvironment.resolve(options.env, from: [:], required: true)
+        }
+    }
+
     func testHostsFileWithWindowsLineEndings() {
         let parsed = HostsFile.parse("web1\r\nweb2 uptime\r\n\r\n# note\r\nweb3\r\n")
         XCTAssertEqual(parsed.map { $0.name }, ["web1", "web2", "web3"])

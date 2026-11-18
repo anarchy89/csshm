@@ -67,6 +67,7 @@ had wide use. Please report problems: see
 - [Install](#install)
 - [Giving hosts](#giving-hosts)
 - [Options](#options)
+- [Putting options together](#putting-options-together)
 - [Containers, pods and other commands](#containers-pods-and-other-commands)
 - [Environment variables](#environment-variables)
 - [Settings file and clusters](#settings-file-and-clusters)
@@ -253,6 +254,83 @@ Each host's session is started as:
     ssh [-i KEY] [ssh_args] [-l USER] [-p PORT] HOST [COMMAND]
 
 unless `--command` is given, in which case the template is run instead.
+
+## Putting options together
+
+Options can be combined freely and given in any order. These are situations
+that come up in real use, with the command for each.
+
+**Your usual fleet.** Servers listed in a file, one user and key for all of
+them, spread over two monitors.
+
+    csshm --login ubuntu --ssh_args "-i ~/.ssh/key" --addresses servers.txt --screen 2-3
+
+**A laptop on a desk with two big monitors.** The servers fill the big
+monitors and the red window sits on the laptop, so nothing on the big
+monitors gives up room for it.
+
+    csshm --addresses servers.txt --screen 2-3 --master_screen 1
+
+**Thirty or forty servers at once.** Use every monitor and smaller text so
+each window still shows a useful amount.
+
+    csshm --login ubuntu --addresses servers.txt --screen 1-4 --font_size 9
+
+**Watching the logs on every web server during a deploy.** Each window runs
+the command in place of a login shell.
+
+    csshm --login ubuntu --remote_command "tail -f /var/log/nginx/error.log" --addresses web.txt --screen 2-3
+
+**Checking disk space across the fleet.** Each window runs the command and
+stays open afterwards, so you can compare the answers side by side.
+
+    csshm --login ubuntu --remote_command_keepalive "df -h /" --addresses servers.txt --screen 2-3
+
+**EC2 instances picked by tag.** Any command that prints hosts can feed
+csshm: hosts are read from standard input when none are named.
+
+    aws ec2 describe-instances --filters "Name=tag:Role,Values=web" \
+        --query "Reservations[].Instances[].PrivateIpAddress" --output text \
+        | tr '\t' '\n' | csshm --login ec2-user --screen 2-3
+
+**Private servers behind a bastion.** Anything ssh accepts can go in
+`--ssh_args`, here a jump host.
+
+    csshm --login ubuntu --ssh_args "-J bastion.example.com" --addresses private.txt
+
+**EC2 instances with no ssh at all**, through AWS Session Manager, using the
+AWS profile from your shell.
+
+    csshm --env AWS_PROFILE=prod --command "aws ssm start-session --target {}" --screen 2 i-0518b235de43acdcd i-0ba5ca0c58dbfeebb
+
+**A shell in every pod of a deployment.**
+
+    kubectl get pods -l app=web --no-headers -o custom-columns=:metadata.name \
+        | csshm --command "kubectl exec -it {} -- sh" --screen 2
+
+**The web and database servers together**, from clusters named in the
+settings file.
+
+    csshm web db --screen 2-3
+
+**A runbook or a dashboard beside the session.** csshm keeps to the left half
+of the monitor and the rest stays free for the browser.
+
+    csshm --addresses servers.txt --bounds 1:0,30-860,900 --tile_x 2
+
+**Servers where you live inside GNU screen**, which needs Ctrl-A for itself.
+Move csshm's menu to another key.
+
+    csshm --menu_key ctrl-b --addresses servers.txt --screen 2
+
+Anything you use every time can go in the
+[settings file](#settings-file-and-clusters), which leaves the command short:
+with `login`, `ssh_args` and `screen` set there, the first example becomes
+`csshm --addresses servers.txt`.
+
+Two things do not combine: `--command` replaces ssh, so it cannot go with
+`--ssh`, `--ssh_args` or `--remote_command` and `--tile_y` is ignored when
+`--tile_x` is given.
 
 ## Containers, pods and other commands
 
