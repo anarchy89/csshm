@@ -53,8 +53,12 @@ the details. Homebrew users can install with `brew` instead: see
 I wrote it because csshX is no longer maintained. It relies on Perl libraries
 that Apple has stopped maintaining on macOS, which leads to some odd bugs.
 
+I also built it to make life a little easier. I hope people use it and I
+plan to maintain it for the foreseeable future.
+
 Status: early. It works in testing with dozens of windows, but has not yet
-had wide use. Please report problems.
+had wide use. Please report problems: see
+[Known and possible bugs](#known-and-possible-bugs) for what helps.
 
 ## Contents
 
@@ -778,25 +782,68 @@ and leaves the windows open afterwards.
 
 ## Known and possible bugs
 
-- **A Mac set to a language other than English (possible, untested).** csshm
-  looks for the Dock by its English name, so on a Mac set to another language
-  it may not find it. Windows could then overlap the Dock or leave a gap
-  after the Dock has moved to another monitor. Setting the Dock to hide
-  automatically avoids this.
+I have tried to think of every variation, but the Dock does not always play
+nice. csshm asks macOS where the Dock is and how much room it takes and the
+answer does not always come back right, most of all just after the Dock has
+been resized, moved or hidden.
+
+In everyday use this should not matter: you set your Mac up one way and
+leave the Dock and the monitors alone. If the windows do come out the wrong
+size or in the wrong place, with or without the Dock, first press Ctrl-A `r`
+to re-tile. If that does not fix it, please
+[open an issue](https://github.com/anarchy89/csshm/issues) with enough for
+me to reproduce it:
+
+- the csshm command you ran and the output of `csshm --version`
+- a screenshot of every monitor
+- how the monitors are arranged, where the Dock is and whether the Dock and
+  the menu bar are set to hide
+- your macOS version
+
+The quirks I know of:
+
+- **Changing the Dock just before or during a session.** macOS can take a
+  few seconds to report a Dock that was just resized, moved, hidden or
+  shown. A session started in that moment or one already open, can be laid
+  out for the old Dock. Ctrl-A `r` measures again and puts it right.
 - **A leftover Dock strip.** A monitor the Dock has left can keep an unused
   strip where the Dock was when its windows are in a single row.
 - **The Dock's thickness is an estimate** on a monitor the Dock has moved to
   and can be a few points off.
 - **The strip beside a MacBook's camera notch stays unused**, even with the
   menu bar hidden.
+- **Monitor numbers can change.** They follow the order macOS reports the
+  monitors in, which can differ after a restart or after plugging the
+  monitors in again. If windows land on the wrong monitor, try another
+  number with `--screen` or move the session with Ctrl-A `v`.
 - **Connecting or disconnecting a monitor while a session is open.** There
   are too many variations of this to test. Windows on a monitor that has
   gone are moved by macOS and the layout may not come out right. Close the
   session with Ctrl-A `x` and run the command again.
+- **Windows flash as they open.** Each new window appears for a moment at
+  Terminal's usual place and size, showing the command that starts it, then
+  moves to its cell and clears.
+- **Very many windows overlap.** Terminal has a minimum window size. With
+  more windows than fit at that size, use more monitors or fewer hosts.
+- **`--retile auto` is experimental**, most of all with more than one
+  monitor. The default, re-tiling when you ask, is the tested path.
+
+Not tested yet, so possible trouble:
+
+- **A Mac set to a language other than English.** csshm looks for the Dock
+  by its English name, so on a Mac set to another language it may not find
+  it. Windows could then overlap the Dock or leave a gap after the Dock has
+  moved to another monitor. Setting the Dock to hide automatically avoids
+  this.
+- **`--bounds` on more than one monitor.** It was tested on a single screen.
+- **Several desktops (Spaces).** A session should stay on the desktop it was
+  started on, but re-tiling while another desktop is showing is untried.
+- **Intel Macs and macOS versions before 27.** The download includes an
+  Intel build and macOS 13 is the minimum, but all testing so far has been
+  on Apple silicon with macOS 27.
 
 [Several monitors](#several-monitors) has more on the Dock strip, the Dock's
-thickness and the notch. If you
-find something else, please open an issue.
+thickness and the notch.
 
 ## How it works
 
