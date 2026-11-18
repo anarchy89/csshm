@@ -167,15 +167,28 @@ open it until you clear the download mark:
 from a tap until you say you trust it. On older versions leave that line out.
 Homebrew builds csshm from source, so Xcode must be installed.
 
-Update with `brew upgrade csshm` and remove with `brew uninstall csshm`.
+[Update](#update) and [Uninstall](#uninstall) below have the Homebrew
+commands for those.
 
 ### Update
+
+If you installed with the install line or by hand:
 
     csshm --update
 
 This checks the latest release and replaces the installed csshm if the
-release is newer. It asks for your password when the folder needs it. A
-copy installed with Homebrew is updated with `brew upgrade csshm` instead.
+release is newer. It asks for your password when the folder needs it.
+
+If you installed with Homebrew:
+
+    brew update
+    brew upgrade csshm
+
+The first line fetches the latest list of versions and the second installs
+the new csshm. `csshm --update` does not touch a copy installed with
+Homebrew and says so.
+
+Either way, `csshm --version` shows which version you have.
 
 ### Uninstall
 
