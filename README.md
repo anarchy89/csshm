@@ -13,6 +13,28 @@ and by ClusterSSH on Linux. It takes the same command line as csshX.
 
 ![Six hosts tiled above the red master window. A command typed once appears in all of them, then one host is disabled and skipped.](docs/overview.gif)
 
+## What it does
+
+- Sends what you type to every server at once or to one server when you click
+  its window.
+- Tiles dozens of windows across one or several monitors, portrait ones
+  included and tiles them again when you ask.
+- Keeps to part of a monitor if you want the rest free (`--bounds`) and shows
+  which number each monitor has (`--list_screens`).
+- Keeps a failed connection open so you can read the error and tries those
+  servers again with one key while the others stay connected.
+- Takes hosts from the command line, from files, from named clusters or from
+  another command's output.
+- Takes the same command line as csshX, so old habits and scripts carry over.
+- Is not limited to ssh: a command template runs `docker exec`, `kubectl exec`
+  or anything else in each window.
+- Passes chosen environment variables such as `AWS_PROFILE` to every window,
+  for AWS SSM and similar setups.
+- Works with zsh, bash, fish and sh as your login shell.
+- Never stores or sends passwords.
+- Is one file with nothing else to install, for both Apple silicon and Intel
+  Macs.
+
 ## Quick start
 
 Install it:
@@ -85,6 +107,7 @@ had wide use. Please report problems: see
 
 ## Contents
 
+- [What it does](#what-it-does)
 - [Quick start](#quick-start)
 - [Requirements](#requirements)
 - [Install / update / uninstall](#install--update--uninstall)
