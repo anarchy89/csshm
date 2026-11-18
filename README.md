@@ -55,7 +55,7 @@ More in [Putting options together](#putting-options-together).
 
 That is all most people need. Run `csshm --help` for a summary or read on for
 the details. Homebrew users can install with `brew` instead: see
-[Install](#install).
+[Install / update / uninstall](#install--update--uninstall).
 
 ## About
 
@@ -87,7 +87,7 @@ had wide use. Please report problems: see
 
 - [Quick start](#quick-start)
 - [Requirements](#requirements)
-- [Install](#install)
+- [Install / update / uninstall](#install--update--uninstall)
 - [Giving hosts](#giving-hosts)
 - [Options](#options)
 - [Putting options together](#putting-options-together)
@@ -113,7 +113,7 @@ had wide use. Please report problems: see
 - Terminal.app. Other terminal applications are not supported.
 - To build from source: Xcode or the Swift toolchain.
 
-## Install
+## Install / update / uninstall
 
     curl -fsSL https://raw.githubusercontent.com/anarchy89/csshm/main/setup.sh | sh
 
@@ -156,11 +156,23 @@ copy installed with Homebrew is updated with `brew upgrade csshm` instead.
 
 ### Uninstall
 
+If you installed with the install line or by hand:
+
     sudo rm /usr/local/bin/csshm
+
+If you installed with Homebrew:
+
+    brew uninstall csshm
+    brew untap anarchy89/tap
+
+The second Homebrew line removes the tap, so Homebrew stops checking it for
+updates. Leave it out if you may install csshm again.
+
+Either way, your settings file stays, if you made one. To remove it too:
+
     rm -rf ~/.config/csshm
 
-The second line removes your settings file, if you made one. csshm keeps
-nothing else on your Mac.
+csshm keeps nothing else on your Mac.
 
 ### Build from source
 
