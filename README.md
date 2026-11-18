@@ -65,6 +65,20 @@ that Apple has stopped maintaining on macOS, which leads to some odd bugs.
 I also built it to make life a little easier. I hope people use it and I
 plan to maintain it for the foreseeable future.
 
+**Why not an orchestration tool?** Tools like Ansible run a command and hand
+you the result. They are the right choice for a change you already
+understand and want to repeat, unattended.
+
+csshm is for work you do by hand. Anything you would do at a terminal on one
+server, you can do on many at once and watch all of them live: start a
+Python script on every machine and see each one's output as it runs, launch
+a machine learning job across a set of GPU boxes and keep an eye on every
+one, tail logs during a deploy, install and check a package or track down
+why three servers out of forty behave differently. You see what each machine
+is doing as it does it, you can answer a prompt or stop one that goes wrong
+and you can click into a single window to do something on that machine
+alone.
+
 Status: early. It works in testing with dozens of windows, but has not yet
 had wide use. Please report problems: see
 [Known and possible bugs](#known-and-possible-bugs) for what helps.
