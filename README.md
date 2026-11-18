@@ -631,7 +631,11 @@ that the master window, not another application, has the keyboard.
 
 **Shell history.** To start each window, csshm types one command into its
 shell. It starts with a space and uses `exec`, which keeps it out of history
-in zsh and bash as normally configured.
+in zsh, bash and fish as normally configured.
+
+**Other shells.** csshm does not depend on your shell. It has been tested
+with zsh, bash, fish and sh as the login shell that Terminal starts. In fish,
+a variable for `--env` must be exported: `set -x AWS_PROFILE prod`.
 
 **Seeing what csshm runs.** `--debug` prints the ssh command in each window
 and leaves the windows open afterwards.

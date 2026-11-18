@@ -62,7 +62,7 @@ public enum ShellWords {
         return words
     }
 
-    /// Quotes one word so that sh, bash and zsh read it back unchanged.
+    /// Quotes one word so that sh, bash, zsh and fish read it back unchanged.
     public static func quote(_ word: String) -> String {
         "'" + word.replacingOccurrences(of: "'", with: "'\\''") + "'"
     }
