@@ -2,7 +2,10 @@
 
 Cluster SSH for macOS: type once and it goes to many SSH sessions at the same time.
 
-csshm is not limited to ssh (see below [Containers, pods and other commands](#containers-pods-and-other-commands))
+It is not limited to ssh. Any command you want to run side by side across
+many servers and watch live will do: AWS SSM sessions, `docker exec`,
+`kubectl exec` or whatever else you use to reach a machine. See
+[Containers, pods and other commands](#containers-pods-and-other-commands).
 
 csshm opens one Terminal window per host, tiles them across your monitors
 and adds a red master window. Whatever you type in the master goes to every
