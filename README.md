@@ -104,6 +104,12 @@ is doing as it does it, you can answer a prompt or stop one that goes wrong
 and you can click into a single window to do something on that machine
 alone.
 
+The two work well side by side. Let Ansible or a similar tool make the
+planned changes and keep csshm open for the parts that need eyes and hands:
+quick troubleshooting when a run fails on a few hosts, watching logs while a
+playbook rolls out, checking that a change did what you expected or trying a
+fix by hand before you write it into a playbook.
+
 Status: early. It works in testing with dozens of windows, but has not yet
 had wide use. Please report problems: see
 [Known and possible bugs](#known-and-possible-bugs) for what helps.
